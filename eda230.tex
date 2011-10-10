@@ -279,7 +279,31 @@ not strictly dominate $w$.
         \OD
     \OD
 \end{program}
+
+\subsubsection*{Insertion of $\phi$-functions}
+\paragraph*{Theory}
+\begin{enumerate}
+\item Two paths $p = (v_0, ..., v_X)$ and $q = (w_0, ..., w_Y)$
+\textbf{converge} at $u$ \iff
+    \begin{enumerate}
+        \item $v_0 \not= w_0$
+        \item $v_X = w_Y = u$
+        \item $(u_i = v_j) \Rightarrow i = X \lor j = Y$
+    \end{enumerate}
+\item Given a set $A$ of vertices, the join of $A$ ($J(A)$) is the set of all
+vertices $w$ such that there are two distinct vertices $u$ and $v$ in $A$ with
+paths which converge at $w$.
+\item $J_{i+1}(A) = J(A \cup J_{i}(A))$, $J^+(A)$ is the fixed-point.
+\item $DF$ can be applied to sets of vertices, mapping $DF$ over all the
+vertices of its argument.
+\item $DF_{i+1}(A) = DF(A \cup DF_{i}(A))$, and $DF^+(A) = J^+(A)$.
+\item The set of vertices which need $\phi$-functions for any variable $v$
+is the iterated dominance frontier $DF_+(A)$, where $A$ is the set of vertices
+with assignment statements to $v$.
+
+\end{enumerate}
 %Hashbased value number
 %Global value numbering
 %Ssa pre (partial redundancy elimination)
 \end{document}
+
