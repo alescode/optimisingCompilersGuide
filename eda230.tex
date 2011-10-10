@@ -176,6 +176,7 @@ It dominates all other vertices in the loop.
 \end{program}
 
 \section*{Dataflow Analysis}
+\subsubsection*{Basics}
 \begin{itemize}
 \item It is concerned with how a procedure uses and defines its variables and 
 expressions
@@ -196,7 +197,7 @@ $kill(v)$ & definitions killed in $v$ \\
 \PROC |reachingDefs|() \BODY
     |workList| = |vertices in reverse postorder|
     \WHILE |workList is not empty| \DO
-        v = |first|(|workList|)
+        v = |workList|.|first|()
         |old| = |out|[v]
         |in|[v] = \displaystyle \bigcup_{p \in pred(v)} |out|[p]
         |out|[v] = |gen|[v] \cup (|in|[v] - |kill|[v])
@@ -209,8 +210,75 @@ $kill(v)$ & definitions killed in $v$ \\
         \FI
     \OD
 \end{program}
+\negv
+\begin{program}
+\PROC |localLiveAnalysis|() \BODY
+    \FOREACH |vertex | v \DO
+        \FOREACH |statement | s \DO
+            \FOREACH |used variable | x | of | s \DO
+                \IF (x \not\in |kill|[v]) \AR*
+                   |use|[v].|add|(x)
+                \FI
+            \OD
+            \FOREACH |defined variable | x | of | s \DO
+                \IF (x \not\in |gen|[v]) \AR*
+                   |kill|[v].|add|(x)
+                \FI
+            \OD
+        \OD
+    \OD
+\end{program}
+\negv
+\begin{program}
+\PROC |globalLiveAnalysis|() \BODY
+    \WHILE |some in|[v] | has changed| \DO
+        \FOREACH |vertex v | \DO
+            |out|[v] = \displaystyle \bigcup_{s \in succ(v)} |in|[s]
+            |in|[v] = |use|[v] \cup (|out|[v] - |kill|[v])
+        \OD
+    \OD
+\end{program}
 
+\section*{Static Single Assignment Form}
+\begin{itemize}
+\item Every variable is defined as most once (statically)
+\item $\phi$-functions: one argument for each predecessor at some join vertices
+\end{itemize}
 
+\subsubsection*{Dominance Frontiers}
+\paragraph*{Theory}
+\begin{enumerate}
+\item $DF(v) = \{w \mid \existe{p}{p \in pred(w)}{v \gge p \land v \not\gg w}\}$
+\\ the \textbf{dominance frontier of vertex v}
+\\ the set of vertices $w$ such that $v$ dominates a predecessor of $w$, but does
+not strictly dominate $w$.
+\item $DF_{local}(v) = \{w \in succ(v) \mid v \not\gg w\}$
+\item $DF_{up}(v) = \{w \in DF(v) \mid iDom(v) \not\gg w\}$
+\item $DF(v) = DF_{local}(v) \cup 
+    \displaystyle \bigcup_{w \in children(v)} DF_{up}(w)$
+\item $DF_{local}(v) = \{w \in succ(v) \mid iDom(w) \not= v\}$
+\item $DF_{up}(v) = \{w \in DF(v) \mid iDom(w) \not= v\}$
+\end{enumerate}
+
+\paragraph*{Algorithm}
+\begin{program}
+\PROC |dominanceFrontiers|() \BODY
+    \FOREACH | vertex | v | in a postorder traversal of DT | \DO
+        |dominanceFrontier|[v] = |new Set|
+        \FOREACH | vertex | w | in succ|(v) \DO
+            \IF (|iDom|(w) \not= v) \AR*
+                |dominanceFrontier|[v].|add|(w)
+            \FI
+        \OD
+        \FOREACH | vertex | w | in children|(v) \DO
+            \FOREACH | vertex | u | in dominanceFrontier|[w] \DO
+                \IF (iDom(u) \not= v) \AR*
+                    |dominanceFrontier|[v].|add|(u)
+                \FI
+            \OD
+        \OD
+    \OD
+\end{program}
 %Hashbased value number
 %Global value numbering
 %Ssa pre (partial redundancy elimination)
