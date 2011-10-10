@@ -4,4 +4,6 @@ http://cs.lth.se/eda230
 I'm a student taking the course.
 
 To compile:
-pdflatex eda230.tex
+0. Locate the file program.sty from your LaTeX installation, and replace it with
+the one in the repository. Remember to keep the old one!
+1. pdflatex eda230.tex
