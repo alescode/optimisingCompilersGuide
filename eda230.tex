@@ -23,6 +23,7 @@
 \renewcommand{\iff}{\textbf{ iff }}
 
 \newcommand{\ind}[1]{\hspace*{#1 cm}}
+\newcommand{\negv}{\vspace{-0.7cm}}
 
 \begin{document}
 
@@ -39,16 +40,17 @@ bounds (infimum and supremum) which are unique. They are called the
 \textit{meet} ($\land$) and \textit{join} ($\lor$), respectively.
 
 \subsubsection*{Tarjan's algorithm for Strongly Connected Components}
-\noindent The algorithm is a modified variant of DFS.
+\negv
 \begin{program}
 \PROC |tarjan|() \BODY
+    |components| = |new Set|
     |dfsNumIndex| = 0
     |stack| = |new Stack|
     \FOREACH |vertex | v | in | V \DO
         \IF (|dfsNum|[v] = null) \AR*
             strongConnect(v)
         \FI \OD
-\end{program} \vspace{-0.7cm}
+\end{program} \negv
 \begin{program}
 \PROC |strongConnect|(|vertex | v) \BODY
     |dfsNum|[v] = |dfsNumIndex|
@@ -66,9 +68,10 @@ bounds (infimum and supremum) which are unique. They are called the
         |scc| = |new Set|
         \DOW
             w = |stack|.|pop|()
-        \ODW (a = a)
+            |scc|.|add|(w)
+        \ODW (w \not= v)
+        |components|.|add|(|scc|)
     \FI
-    a = a
 \end{program}
 \section*{Dominance Analysis}
 \subsubsection*{Compute dominance}
@@ -80,7 +83,7 @@ bounds (infimum and supremum) which are unique. They are called the
 \item $u \gge v$ \iff $u \gge p_i$ for every $p_i \in pred(v)$
 \item $dom(w) = \{w\} \cup \displaystyle \bigcap_{p \in pred(w)} dom(p)$
 \end{enumerate}
-\vspace{-0.7cm}
+\negv
 \begin{program}
 \PROC |computeDominance|() \BODY
     |dom|[s] = \{s\}
@@ -142,7 +145,7 @@ $parent$ is the parent in the DFS tree after calling $dfs()$.
         \FI
     \OD
 \end{program}
-\vspace{-0.7cm}
+\negv
 \begin{program}
 \PROC |ancestorWithLeastSdom|(|vertex |w) \BODY
     |go through the ancestor chain of | w
