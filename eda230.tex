@@ -75,6 +75,7 @@ bounds (infimum and supremum) which are unique. They are called the
 \end{program}
 \section*{Dominance Analysis}
 \subsubsection*{Compute dominance}
+\paragraph*{Theory}
 \begin{enumerate}
 \item $v \gge w $ \iff every path from $s$ to $w$ includes $v$. 
 \\ $v$ \textbf{dominates} $w$.
@@ -83,7 +84,8 @@ bounds (infimum and supremum) which are unique. They are called the
 \item $u \gge v$ \iff $u \gge p_i$ for every $p_i \in pred(v)$
 \item $dom(w) = \{w\} \cup \displaystyle \bigcap_{p \in pred(w)} dom(p)$
 \end{enumerate}
-\negv
+\vspace{-0.5cm}
+\paragraph*{Algorithm}
 \begin{program}
 \PROC |computeDominance|() \BODY
     |dom|[s] = \{s\}
