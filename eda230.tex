@@ -73,6 +73,7 @@ bounds (infimum and supremum) which are unique. They are called the
         |components|.|add|(|scc|)
     \FI
 \end{program}
+
 \section*{Dominance Analysis}
 \subsubsection*{Compute dominance}
 \paragraph*{Theory}
@@ -154,6 +155,28 @@ $parent$ is the parent in the DFS tree after calling $dfs()$.
     |return ancestor with the least sDom|
 \end{program}
 
+\section*{Loop Analysis}
+\subsubsection*{Basics}
+\begin{enumerate}
+\item A loop is a subgraph of the CFG that is a strongly connected component
+\item An entry loop is a vertex with a predecessor that is not in the loop
+\item Irreducible loops have multiple entry points
+\item Reducible or natural loops only have one entry point: the loop header. 
+It dominates all other vertices in the loop.
+\end{enumerate}
+\negv
+\begin{program}
+\PROC |identifyNaturalLoops|() \BODY
+    \FOREACH |back edge | (v, w) | of | G \DO
+        \IF (w.|dominates|(v)) \AR*
+            |search backwards all paths from | v | to | w.
+            |the visited vertices belong to the natural loop|
+        \FI
+    \OD
+
+\section*{Dataflow Analysis}
+How a procedure uses and defines its variables and expressions.
+\end{program}
 
 Hashbased value number
 Global value numbering
