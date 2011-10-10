@@ -94,7 +94,7 @@ bounds (infimum and supremum) which are unique. They are called the
         |dom|[v] = V \OD
     \WHILE |some dom|[v] | has changed| \DO
         \FOREACH |vertex | v | in | V | except | s \DO
-            |dom|[v] = \{v\} \cup \displaystyle \bigcap_{p \in pred(w)} |dom|[p]
+            |dom|[v] = \{v\} \cup \displaystyle \bigcap_{p \in pred(v)} |dom|[p]
             \OD
     \OD
 \end{program}
@@ -191,6 +191,25 @@ $out(v)$ & definitions reaching the end of $v$ \\
 $gen(v)$ & definitions generated in $v$ \\
 $kill(v)$ & definitions killed in $v$ \\
 \end{tabular}
+
+\begin{program}
+\PROC |reachingDefs|() \BODY
+    |workList| = |vertices in reverse postorder|
+    \WHILE |workList is not empty| \DO
+        v = |first|(|workList|)
+        |old| = |out|[v]
+        |in|[v] = \displaystyle \bigcup_{p \in pred(v)} |out|[p]
+        |out|[v] = |gen|[v] \cup (|in|[v] - |kill|[v])
+        \IF (|old| \not= |out|(v)) \AR*
+            \FOREACH |succesor | s | of | v \DO
+                \IF (s | is not in workList|) \AR* 
+                    |workList|.|add|(s)
+                \FI
+            \OD
+        \FI
+    \OD
+\end{program}
+
 
 %Hashbased value number
 %Global value numbering
