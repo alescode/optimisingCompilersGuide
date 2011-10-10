@@ -7,3 +7,6 @@ To compile:
 0. Locate the file program.sty from your LaTeX installation, and replace it with
 the one in the repository. Remember to keep the old one!
 1. pdflatex eda230.tex
+
+You can also download the not-so-often-updated PDF file from the Downloads page
+of the project.
