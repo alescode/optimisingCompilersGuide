@@ -173,12 +173,26 @@ It dominates all other vertices in the loop.
             |the visited vertices belong to the natural loop|
         \FI
     \OD
-
-\section*{Dataflow Analysis}
-How a procedure uses and defines its variables and expressions.
 \end{program}
 
-Hashbased value number
-Global value numbering
-Ssa pre (partial redundancy elimination)
+\section*{Dataflow Analysis}
+\begin{itemize}
+\item It is concerned with how a procedure uses and defines its variables and 
+expressions
+\item Every assignment statement is given an index
+\item Local analysis discovers what happens within a vertex: its output is
+$gen(v)$ and $kill(v)$
+\item Global analysis: each vertex has $in(v)$ and $out(v)$ in addition to $gen$
+and $kill$.
+\end{itemize}
+\begin{tabular}{ll}
+$in(v)$ & definitions reaching the beginning of $v$ \\
+$out(v)$ & definitions reaching the end of $v$ \\
+$gen(v)$ & definitions generated in $v$ \\
+$kill(v)$ & definitions killed in $v$ \\
+\end{tabular}
+
+%Hashbased value number
+%Global value numbering
+%Ssa pre (partial redundancy elimination)
 \end{document}
