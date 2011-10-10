@@ -1,0 +1,156 @@
+\documentclass[a4paper,12pt, notitlepage]{article}
+
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{program}
+\usepackage{color}
+
+\renewcommand{\o}{\lor}
+\newcommand{\gge}{\ \underline{\gg}\ }
+\newcommand{\no}{\neg}
+\newcommand{\eq}{\equiv}
+\newcommand{\nq}{\not\equiv}
+\newcommand{\tq}{\mid}
+%\newcommand{\impl}{\Rightarrow}
+\newcommand{\conseq}{\Leftarrow}
+\newcommand{\existe}[3]{(\exists #1 \mid #2 : #3)}
+\newcommand{\patodo}[3]{(\forall #1 \mid #2 : #3)}
+\newcommand{\cgen}[4]{(#1 #2 \mid \ #3 : #4)}
+\newcommand{\sust}[3]{#1 [#2 := #3]}
+\newcommand{\nolibre}[2]{\no \textit{ocurre-libre}('#1', '#2')}
+\newcommand{\range}[3]{#1 \leq #2 < #3}
+
+\renewcommand{\iff}{\textbf{ iff }}
+
+\newcommand{\ind}[1]{\hspace*{#1 cm}}
+
+\begin{document}
+
+\begin{center}
+
+{\Large{Study Guide\\ \bigskip
+			Optimising Compilers @ Lunds Universitet}}
+\vspace{1cm}
+\end{center}
+\section*{Basics}
+\subsubsection*{Lattice}
+It's a partially ordered set where every pair has least upper and greatest lower
+bounds (infimum and supremum) which are unique. They are called the
+\textit{meet} ($\land$) and \textit{join} ($\lor$), respectively.
+
+\subsubsection*{Tarjan's algorithm for Strongly Connected Components}
+\noindent The algorithm is a modified variant of DFS.
+\begin{program}
+\PROC |tarjan|() \BODY
+    |dfsNumIndex| = 0
+    |stack| = |new Stack|
+    \FOREACH |vertex | v | in | V \DO
+        \IF (|dfsNum|[v] = null) \AR*
+            strongConnect(v)
+        \FI \OD
+\end{program} \vspace{-0.7cm}
+\begin{program}
+\PROC |strongConnect|(|vertex | v) \BODY
+    |dfsNum|[v] = |dfsNumIndex|
+    |lowLink|[v] = |dfsNumIndex|
+    |dfsNumIndex| \texttt{ += } 1
+    |stack|.|push|(v)
+    \FOREACH w | in | succ(v) \DO
+        \IF (|dfsNum|[w] = null) \AR*
+            |strongConnect|(w)
+            |lowLink|[v] = min(|lowLink|[v], |lowLink|[w])
+        \ELSIF (|dfsNum|[w] < |dfsNum|[v] \land |stack|.|contains|(w)) \AR*
+            |lowLink|[v] = min(|lowLink|[v], |dfsNum|[w]) \FI
+    \OD
+    \IF (|lowLink|[v] = |dfsNum|[v]) \AR*
+        |scc| = |new Set|
+        \DOW
+            w = |stack|.|pop|()
+        \ODW (a = a)
+    \FI
+    a = a
+\end{program}
+\section*{Dominance Analysis}
+\subsubsection*{Compute dominance}
+\begin{enumerate}
+\item $v \gge w $ \iff every path from $s$ to $w$ includes $v$. 
+\\ $v$ \textbf{dominates} $w$.
+\item $dom(w) = \{v \mid v \gge w\}$
+\item $\gge$ is a partial order relation. 
+\item $u \gge v$ \iff $u \gge p_i$ for every $p_i \in pred(v)$
+\item $dom(w) = \{w\} \cup \displaystyle \bigcap_{p \in pred(w)} dom(p)$
+\end{enumerate}
+\vspace{-0.7cm}
+\begin{program}
+\PROC |computeDominance|() \BODY
+    |dom|[s] = \{s\}
+    \FOREACH |vertex | v | in | V | except | s \DO
+        |dom|[v] = V \OD
+    \WHILE |some dom|[v] | has changed| \DO
+        \FOREACH |vertex | v | in | V | except | s \DO
+            |dom|[v] = \{v\} \cup \displaystyle \bigcap_{p \in pred(w)} |dom|[p]
+            \OD
+    \OD
+\end{program}
+\subsubsection*{Lenguaer-Tarjan Algorithm (Dominator Tree)}
+\paragraph*{Theory}
+\begin{enumerate}
+\item $v \gg w $ \iff $v \gge w \land v \not= w$
+\\ $v$ \textbf{strictly dominates} $w$.
+\item $v \in dom(w) \land u \in dom(w) \Rightarrow u \gge v \lor v \gge u$
+\item $v = iDom(w)$ \iff $v \gg w \land \patodo{u}{u \gg w}{v \not\gg u}$
+\\ $v$ \textbf{is the immediate dominator of} $w$.
+\item The graph of the reflexive and transitive closure of the dominance
+relation is a  tree, called the dominator tree (DT). $(u,v) \in DT$ 
+\iff $u = iDom(v)$.
+\item $u \gge v$ \iff $dfsNum(u) \leq dfsNum(v) \land \\ 
+dfsNum(v) \leq dfsNum(u) + numberOfDescendants(u)$
+\item $v = sDom(w)$ \iff $v$ is the smallest vertex by $dfsNum$ such that there
+is a path $(v, u_1, u_2, ..., u_{k-1}, w)$ with $dfsNum(u_i) > dfsNum(w)$.
+\\ The semidominator is frequently equal to the immediate dominator.
+\end{enumerate}
+
+\paragraph*{Algorithm}
+$parent$ is the parent in the DFS tree after calling $dfs()$.
+\begin{program}
+\PROC |lenguaerTarjan|() \BODY
+    |emptyBuckets()|
+    |setSdominatorsToSelf()|
+    |dfs()|
+    \FOREACH |vertex | v | in reverse | dfsNumber | order| \DO
+        \FOREACH |predecessor | p | of | v \DO
+            u = |ancestorWithLeastSdom(p)|
+            \IF (|dfsNum|(|sDom|[u]) < |dfsNum|(|sDom|[v])) \AR*
+                |sDom|[v] = |sDom|[u] 
+            \FI
+        \OD
+        |bucket|[|sDom|[v]].add(v)
+        |ancestor|[v] = |parent|(v) 
+        \FOREACH |vertex | b| in bucket|[|parent|(v)] \DO
+            |remove b|
+            u = |ancestorWithLeastSdom(b)|
+            \IF (|dfsNum|(|sDom|[u]) < |dfsNum|(|sDom|[b])) \AR*
+                |iDom|[b] = u
+            \ELSE
+                |iDom|[b] = |parent|(v)
+            \FI
+        \OD
+    \OD
+    \FOREACH |vertex | v | except | s \DO
+        \IF |iDom|[v] \not= |sDom|[v] \AR*
+            |iDom|[v] = |iDom|[|iDom|[v]]
+        \FI
+    \OD
+\end{program}
+\vspace{-0.7cm}
+\begin{program}
+\PROC |ancestorWithLeastSdom|(|vertex |w) \BODY
+    |go through the ancestor chain of | w
+    |return ancestor with the least sDom|
+\end{program}
+
+
+Hashbased value number
+Global value numbering
+Ssa pre (partial redundancy elimination)
+\end{document}
