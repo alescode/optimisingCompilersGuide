@@ -252,6 +252,8 @@ $kill(v)$ & definitions killed in $v$ \\
 \\ the \textbf{dominance frontier of vertex v}
 \\ the set of vertices $w$ such that $v$ dominates a predecessor of $w$, but does
 not strictly dominate $w$.
+\\ if $v$ dominates a predecessor of $w$ but does not strictly dominate $w$,
+    then $w$ is in the dominance frontier of $v$.
 \item $DF_{local}(v) = \{w \in succ(v) \mid v \not\gg w\}$
 \item $DF_{up}(v) = \{w \in DF(v) \mid iDom(v) \not\gg w\}$
 \item $DF(v) = DF_{local}(v) \cup 
@@ -366,6 +368,7 @@ with assignment statements to $v$.
     \OD
     \FOREACH w | in children|(v) \DO
         |search|(w)
+    \texttt{// pop every variable version pushed in v}
     \FOREACH |assignment statement | s | in |v \DO
         \FOREACH | variable | x | in | oldLHS(s) \DO
             |S|[x].|pop|()
