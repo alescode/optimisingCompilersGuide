@@ -302,6 +302,7 @@ is the iterated dominance frontier $DF_+(A)$, where $A$ is the set of vertices
 with assignment statements to $v$.
 \end{enumerate}
 
+\pagebreak
 \paragraph*{Algorithm}
 \begin{program}
 \PROC |insert_|\phi() \BODY
@@ -317,11 +318,11 @@ with assignment statements to $v$.
             |work|[v] = |iteration|
             W.|add|(v)
         \OD
-        \WHILE (W | is not empty |) \DO 
+        \WHILE (W | is not empty|) \DO 
             v = |take vertex from | W
             \FOREACH w | in | DF(v) \DO
                 \IF (|hasAlready|[w] < |iteration|) \AR*
-                    |place | V = \phi(V,...,V) | at | w
+                    |place | x = \phi(x,...,x) | at | w
                     |hasAlready|[w] = |iteration|
                     \IF (|work|[w] < |iteration|) \AR*
                         |work|[w] = |iteration|
@@ -332,6 +333,103 @@ with assignment statements to $v$.
         \OD
     \OD
 \end{program}
+\negv
+\begin{program}
+\PROC |renameVariables|() \BODY
+    \FOREACH | variable | x \DO
+        |C|[x] = 0
+        |S|[x] = |new Stack|
+    \OD
+    |search|(s) \hspace{1cm} \texttt{// s = the start vertex}
+\end{program}
+\pagebreak
+\begin{program}
+\PROC |search|(|vertex | v) \BODY
+    \FOREACH | assignment statement | s | in | v \DO
+        \FOREACH | variable | x | in | RHS(s) \DO
+            i = |S|[x].|top|()
+            |replace use of | x | by use of | x_i
+        \OD
+        \FOREACH | variable | x | in | LHS(s) \DO
+            i = |C|[x]
+            |replace | x | by | x_i
+            |S|[x].|push|(i)
+            |C|[x] \texttt{ += } 1
+        \OD
+    \OD
+    \FOREACH w | in | succ(v) \DO
+        j = |which predecessor is v to w? | \hspace{1cm} \texttt{// first, second, ... ?}
+        \FOREACH \phi|-function in | w \DO
+            i = |S|[x].|top|()
+            |replace use of the | j |-th operand in | RHS(\phi) | by use of | x_i
+        \OD
+    \OD
+    \FOREACH w | in children|(v) \DO
+        |search|(w)
+    \FOREACH |assignment statement | s | in |v \DO
+        \FOREACH | variable | x | in | oldLHS(s) \DO
+            |S|[x].|pop|()
+        \OD
+    \OD
+\end{program}
+
+\section*{SSA Optimisation}
+\subsubsection*{Partial Redundancy Elimination (PRE)}
+\paragraph*{Theory}
+\subsubsection*{Basics}
+\begin{itemize}
+\item Attempt to calculate expressions only once
+\item Partial redundancy: one of the expressions is inside an \texttt{if-else}
+\item Page 142 examples
+\item Loop improvement 
+\item Global value numbering can optimise code that PRE cannot
+\item Common subexpression elimination and code motion of loop invariants are
+subsumed by PRE
+\end{itemize}
+
+\subsubsection*{Theory}
+\begin{enumerate}
+\item Two operands $a_j$ and $b_k$ are equal \iff $a = b$
+\item A computation $E_1$ at some point in the program is an occurrence of
+computation $E$ if both perform the same operation and have equal operands
+\item A computation $E$ is preserved along a path $P$ if $P$ contains nothing
+that may alter the value of $E$.
+\item If $E_1$ and $E_2$ are occurrences of $E$, and there is a path in the
+program from $E_1$ to $E_2$ which preserves $E$, then $E_2$ is said to be
+redundant with respect to $E_1$.
+\item If $p$ is a point in the program and there is a path from $p$ to $E_1$
+which preserves $E$ and contains no occurrence of $E$ between $p$ and $E_1$, 
+$E_1$ is exposed with respect to $p$.
+\item The set of occurrences to which $E_0$ is both redundant and exposed is
+denoted $\Omega$.
+\item The set of alterations of the value of $E$ is denoted $A$ (remember
+        translation to SSA-form).
+\item A vertex $v$ in $G$ is a $\phi$-vertex for $E_0$ \iff
+    \begin{itemize}
+        \item The beginning of $v$ dominates $E_0$
+        \item There exist distinct $u_1$, $u_2 \in \Omega \cup A$ and paths $p_1$ 
+        and $p_2$ such that $u_1$ is contained in the first vertex of $p_1$, 
+        $u_2$ is contained in the first vertex of $p_2$, and $p_1$ and $p_2$
+        converge in $v$.
+    \end{itemize}
+\item An occurrence is \textbf{real} if it corresponds to code in the program,
+    $\phi$ if it is a $\phi$-function.
+\item A computation $E$ is partially available at point $p$ in the program if
+there is a path from a real occurrence of the computation to $p$ that preserves
+$E$.
+\item A computation $E$ is fully available at point $p$ in the program if it is
+partially available from every path from program entry $s$ to $p$.
+\item An occurrence $E_0$ is partially redundant if $E$ is partially available
+just before $E_0$
+\item An occurrence $E_0$ is fully redundant if $E$ is fully available
+just before $E_0$
+\item Analogous: partially and fully anticipated
+\item A placement is safe if all inserted real occurrences of a computation are
+fully anticipated or fully available
+\item A placement is computationally optimal if no safe placement can result in
+fewer occurrences of the computation along any path from entry to exit in the
+program
+\end{enumerate}
 %Hashbased value number
 %Global value numbering
 %Ssa pre (partial redundancy elimination)
