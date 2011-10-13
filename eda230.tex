@@ -347,12 +347,14 @@ with assignment statements to $v$.
 \pagebreak
 \begin{program}
 \PROC |search|(|vertex | v) \BODY
+    |oldLHS| = |new List|
     \FOREACH | assignment statement | s | in | v \DO
         \FOREACH | variable | x | in | RHS(s) \DO
             i = |S|[x].|top|()
             |replace use of | x | by use of | x_i
         \OD
         \FOREACH | variable | x | in | LHS(s) \DO
+            |oldLHS|.|add|(x)
             i = |C|[x]
             |replace | x | by | x_i
             |S|[x].|push|(i)
@@ -369,10 +371,8 @@ with assignment statements to $v$.
     \FOREACH w | in children|(v) \DO
         |search|(w)
     \texttt{// pop every variable version pushed in v}
-    \FOREACH |assignment statement | s | in |v \DO
-        \FOREACH | variable | x | in | oldLHS(s) \DO
-            |S|[x].|pop|()
-        \OD
+    \FOREACH | variable | x | in | oldLHS(s) \DO
+        |S|[x].|pop|()
     \OD
 \end{program}
 
@@ -532,9 +532,10 @@ program
 \item \texttt{insert-$\Phi$}
 \item \texttt{rename}
 \item \texttt{downsafety}
-\item \texttt{can\_be\_available}
+\item \texttt{canBeAvailable}
 \item \texttt{finalise1}
 \item \texttt{finalise2}
+\item \texttt{codeMotion}
 \end{itemize}
 \paragraph*{$\Phi$-insertion}
 A $\Phi$ is needed whenever two different values of $E$ reach a common point in
@@ -776,15 +777,6 @@ insert we insert a new real occurrence \texttt{occ} at $\omega$ and set
 \texttt{def[$\omega$] = availableDef[x]}.
 \end{itemize}
 
-\begin{program}
-\PROC |setSave|(\psi) \BODY
-    \IF (\psi | is a real occurrence|) \AR*
-        |save|(\psi) = true
-    \ELSIF (\psi | is a | \Phi | occurrence|) \AR*
-        \FOREACH |operand | \omega | of | \psi \DO
-            
-\end{program}
-
 These are the tasks for \texttt{finalise2}:
 \begin{itemize}
 \item To set a flag called \texttt{save} for real occurrences which should save
@@ -792,6 +784,140 @@ their computation to $t$ for use by subsequent reloads by other real
 occurrences
 \item Remove extraneous $\Phi$s
 \end{itemize}
+
+\pagebreak
+\begin{program}
+\PROC |finalise2|() \BODY
+    \FOREACH f | in FRG satisfying willBeAvailable | \DO
+        |extraneous|[f] = true
+    \OD
+    \FOREACH | real occurrence | \psi \DO
+        |save|[\psi] = false
+    \OD
+    \FOREACH f | in FGR | \DO
+        \FOREACH | operand | \omega | of | f \DO
+            |processed|[\omega] = false
+        \OD
+    \OD
+    \FOREACH | real occurrence | \psi | satisfying reload| \DO
+        |setSave|(|def|(\psi))
+    \FOREACH F | in FGR | \DO
+        \IF (f | satisfies willBeAvailable|) \AR*
+            \IF (|extraneous|[f]) \AR*
+                \FOREACH | operand | \omega | of | f \DO
+                    \IF (|def|[\omega] | is a | \Phi | and not extraneous|[|def|[\omega]]
+                         \lor | def|[\omega] | is real | \lor
+                         \lor | def|[\omega] | is inserted|) \AR*
+                        |setReplacement|(f, |def|[\omega])
+                    \ELSE
+                        F = F - \{f\}
+                    \FI
+                \OD
+            \FI
+        \FI
+    \OD
+\end{program}
+
+\begin{program}
+\PROC |setSave|(\psi) \BODY
+    \IF (\psi | is a real occurrence|) \AR*
+        |save|(\psi) = true
+    \ELSIF (\psi | is a | \Phi | occurrence|) \AR*
+        \FOREACH |operand | \omega | of | \psi \DO
+            \IF (!|processed|[\omega]) \AR*
+                |setSave|(|def|[w])
+            \FI
+        \OD
+    \FI
+    \IF (\psi | is real or inserted occurrence|) \AR*
+        \FOREACH (|willBeAvailable | f | in FRG such that | f \in DF^+(\psi)) \DO
+            |extraneous|[f] = false
+        \OD
+    \FI
+\end{program}
+\pagebreak
+\begin{program}
+\PROC |setReplacement|(g, |replacingDefinition|) \BODY
+    \FOREACH |willBeAvailable | f | in FGR with j-th operand defined by | g \DO
+        \IF (|extraneous|[f]) \AR*
+            |setReplacement|(|f|, |replacingDefinition|)
+        \ELSE
+            |replace j-th operand by replacingDefinition|
+        \FI
+        \FOREACH |real occurrence | \psi | satisfying reload with def|[\psi] = g \DO
+            F = F - \{g\}
+        \OD
+    \OD
+\end{program}
+
+\paragraph*{Code motion}
+The last part of SSAPRE updates the program with the temporary expressions on
+SSA form. In a preorder traversal of the dominator tree, each occurrence is
+processed as follows: if \texttt{save} is true, a new version of the temporary
+is created and code is inserted to save the value of the expression in the
+temporary. If the occurrence $\omega$ is a real or a $\Phi$ operand and the
+reload flag is true, the computation is replaced by the use of the temporary
+saved by \texttt{def($\omega$)}. At each inserted occurrence, the value is saved
+in a new version of the temporary, and at a $\Phi$ a $\phi$-function for the
+temporary is created.
+
+\subsubsection*{Global Value Numbering (GNV)}
+It aims at removing redundant computations. PRE discovers redundant evaluations
+of some expression with particular lexical operator and operands, while GNV can
+eliminate redundancy between lexically different expressions that produce the
+same value.
+\begin{verbatim}
+x = a + a;
+y = a * 2; // redundant
+\end{verbatim}
+It does not optimise partial redundancy.
+Trend: use GNV, then PRE.
+
+\paragraph*{Hash-based value numbering: a simpler version}
+This is an improvement to the renaming stage of the translation to SSA form.
+
+\pagebreak
+\begin{program}
+\PROC |search|(|vertex | v) \BODY
+    |oldLHS| = |new List|
+    |enter new scope in hash table | (|hashTable|[v])
+    \FOREACH | statement | s | in | v \DO
+        \FOREACH | variable | x | in | RHS(s) \DO
+            i = |S|[x].|top|()
+            |replace use of | x | by use of | x_i
+        \OD
+        x = |LHS|(s)
+        \IF (x = null) \AR*
+            \textbf{continue}
+        \FI
+        |oldLHS|.|add|(x)
+        |simplify | s | using e.g. | x_i - x_i = 0
+        h = |hashTable|[v][|RHS|(s)]
+        \IF (h | was found|) \AR*
+            |push (left-hand side) | h | onto S|[x]
+        \ELSE
+            i = |C|[x]
+            |replace | x | by | x_i
+            |S|[x].|push|(i)
+            |C|[x] \texttt{ += } 1
+            |hashTable|[v][|RHS|(s)] = |LHS|(s)
+        \FI
+    \OD
+    \FOREACH w | in | succ(v) \DO
+        j = |which predecessor is v to w? | \hspace{1cm} \texttt{// first, second, ... ?}
+        \FOREACH \Phi|-function in | w \DO
+            i = |S|[x].|top|()
+            |replace use of the | j |-th operand in | RHS(\Phi) | by use of | x_i
+        \OD
+    \OD
+    \FOREACH w | in children|(v) \DO
+        |search|(w)
+    \texttt{// pop every variable version pushed in v}
+    \FOREACH | variable | x | in | oldLHS(s) \DO
+        |S|[x].|pop|()
+    \OD
+
+\end{program}
 
 %Hashbased value number
 %Global value numbering
