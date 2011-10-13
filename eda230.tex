@@ -916,11 +916,101 @@ This is an improvement to the renaming stage of the translation to SSA form.
     \FOREACH | variable | x | in | oldLHS(s) \DO
         |S|[x].|pop|()
     \OD
-
 \end{program}
 
-%Hashbased value number
-%Global value numbering
-%Ssa pre (partial redundancy elimination)
+\paragraph*{Global value numbering}
+\begin{itemize}
+\item Constructs a value graph from the SSA graph. Nodes are values, labeled as
+variables, constants or operations. A $\phi$ function is labeled by its vertex
+in the CFG. There is an edge in the VG from a node which uses a value to the
+node that defines the value. The edges going from a node are ordered.
+\item Initially makes a partition $\pi_0$ where all nodes with the same function
+label are assumed to be congruent and belong to the same $B_i$. All 
+$\phi$-functions, multiplications and so on belong to different $B_i$s.
+\item We want a partition which gives us as many equal values as possible,
+satisfying the following rule:
+\item Two nodes in the value graph are congruent \iff the nodes have identical
+function labels and the corresponding heads of the edges leaving the nodes are
+congruent
+\end{itemize}
+
+\paragraph*{$O(N^2)$ algorithm}
+The algorithm checks all blocks to see if any should be split into two:
+when it discovers that two nodes in the same block which are not congruent.
+
+\begin{program}
+\PROC N^2-|partition|() \BODY
+    \pi_0 = \{B_0, B_1, ..., B_p\}
+    i = 0
+    |change| = true
+    \WHILE (|change|) \DO
+        |change| = false
+        k = 0
+        \FOREACH B_j | in | \pi_i \DO
+            v = |node from | B_j
+            |create a new block | B_k | in | \pi_{i+1}
+            |put | v | in | B_k | in | \pi_{i+1}
+            \FOREACH | node | w \in B_j \DO
+                \IF (|match|(v, w)) \AR*
+                    |add | w | to | B_k | in | \pi_{i+1}
+                \ELSE
+                    |change| = true
+                    |add | w | to | B_{k+1}
+                \FI
+            \OD
+        k \texttt{ += } 1
+    \OD
+    i \texttt{ += } 1
+\end{program}
+\negv
+\begin{program}
+\PROC |match|(|node | v, | node | w) \BODY
+    \FOR i = 1 | until the number of operands of | v \DO
+        a_v = |head of | i|-th edge of | v
+        a_w = |head of | i|-th edge of | w
+        \IF (a_v | and | a_w | belong to different blocks|) \AR*
+            \textbf{return } false
+        \FI
+    \OD
+    \textbf{return } true
+\end{program}
+
+\paragraph*{$O(N log N)$ algorithm}
+\begin{itemize}
+\item A block $B_j$ is split into two new blocks using $B_i$ such that\\
+$B_k = \{v \mid v \in B_j \land f(v) \in B_i\}$ and $B_{k+1} = \{v \mid v \in
+B_j \land f(v) \not\in B_i\}$
+\item For each block $B_i \subseteq S$, $f^{-1}(B) = \{v \mid f(v) \in B\}$
+\item A partition $\phi$ is safe with respect to a $T \subseteq S$ if for each
+block $B_i$ we have either $B_i \subseteq f^{-1}(T)$ or $B_i \ \cap f^{-1}(T) =
+\emptyset$
+\end{itemize}
+\negv
+\begin{program}
+\PROC |partitionValueGraph|() \BODY
+    |workList| = \{B_1, B_2,..., B_p\}
+    q = p
+    \WHILE (|workList| \not= \emptyset) \DO
+        |take a | B_i | from worklist|
+        \FOREACH | position | p | of a use of | x \in B_i \DO
+            |inverse| = \emptyset
+            \FOREACH x \in B_i \DO
+                |add all uses of | x | in position | p | to inverse|
+            \OD
+            \FOREACH j | such that | B_j \cap | inverse | \not= \emptyset \land \ B_j \not\subseteq |inverse| \DO
+                     q \texttt{ += } 1
+                     |create new class | B_q
+                     B_q = B_j \cap |inverse|
+                     B_j = B_j - B_q
+                     \IF (B_j \in |workList|)
+                        |add | B_q | to workList|
+                    \ELSE
+                        |add | min(B_j, B_q) | to workList|
+                    \FI
+            \OD
+        \OD
+    \OD
+\end{program}
+
 \end{document}
 
