@@ -378,19 +378,106 @@ with assignment statements to $v$.
 
 \section*{SSA Optimisation}
 \subsubsection*{Partial Redundancy Elimination (PRE)}
-\paragraph*{Theory}
-\subsubsection*{Basics}
+\paragraph*{Basics}
 \begin{itemize}
 \item Attempt to calculate expressions only once
 \item Partial redundancy: one of the expressions is inside an \texttt{if-else}
-\item Page 142 examples
+\pagebreak
+\item Case examples
+    \begin{enumerate}
+        \item 
+        \begin{verbatim}
+if (a * b > max)
+    max = a * b
+        \end{verbatim} \vspace{-0.5cm}
+        is translated into...
+        \begin{verbatim}
+t = a * b
+if (t > max)
+    max = t
+        \end{verbatim} \vspace{-0.5cm}
+        \item 
+        \begin{verbatim}
+if (condition)
+    x = a * b
+y = a * b
+        \end{verbatim} \vspace{-0.5cm}
+        is translated into...
+        \begin{verbatim}
+if (condition) {
+    t = a * b
+    x = t
+}
+else
+    t = a * b
+y = t
+        \end{verbatim} \vspace{-0.5cm}
+        \item 
+        \begin{verbatim}
+do {
+    x += a * b
+}
+while (x < y)
+        \end{verbatim} \vspace{-0.5cm}
+        is translated into...
+        \begin{verbatim}
+t = a * b
+do {
+    x += t
+}
+while (x < y)
+        \end{verbatim} \vspace{-0.5cm}
+        \pagebreak
+        \item 
+        \begin{verbatim}
+do {
+    x += a * b
+}
+while (x < y)
+        \end{verbatim} \vspace{-0.5cm}
+        is translated into...
+        \begin{verbatim}
+t = a * b
+do {
+    x += t
+}
+while (x < y)
+        \end{verbatim} \vspace{-0.5cm}
+        \item 
+        \begin{verbatim}
+if (condition) {
+    // some code
+    y = x + 4
+}
+else {
+    // other code
+}
+z = x + 4
+        \end{verbatim} \vspace{-0.5cm}
+        is translated into...
+        \begin{verbatim}
+if (condition) {
+    // some code
+    t = x + 4
+    y = t
+}
+else {
+    // other code
+    t = x + 4
+}
+z = t
+        \end{verbatim}
+            
+            
+
+    \end{enumerate}
 \item Loop improvement 
 \item Global value numbering can optimise code that PRE cannot
 \item Common subexpression elimination and code motion of loop invariants are
 subsumed by PRE
 \end{itemize}
 
-\subsubsection*{Theory}
+\paragraph*{Theory}
 \begin{enumerate}
 \item Two operands $a_j$ and $b_k$ are equal \iff $a = b$
 \item A computation $E_1$ at some point in the program is an occurrence of
@@ -433,6 +520,54 @@ fully anticipated or fully available
 fewer occurrences of the computation along any path from entry to exit in the
 program
 \end{enumerate}
+
+\paragraph*{Algorithm} 
+\paragraph*{$\phi$-insertion}
+A $\phi$ is needed whenever two different values of $E$ reach a common point in
+the program. Therefore, there are two sets of vertices in whose iterated
+dominance frontier we will insert $\phi$-functions: the set $R$ of real
+occurrences of $E$ and the set $A$ of vertices with assignments to an operand of
+$E$. An assignment to an operand of $E$ is a computation of $E$ which produces
+the value $\bot$. 
+
+\textbf{Thus, we insert a $\phi$ at the beginning of every vertex in
+$DF^+(R) \cup DF^+(A)$}.
+
+An \textbf{evaluation} of a computation $E$ is either a real occurrence, a
+$\phi$ occurrence or an assignment to an operand of $E$.
+
+\paragraph*{Renaming}
+Two occurrences of $E$ with the same version number have equal values. 
+The algorithm is based on the rename algorithm for the translation to SSA form.
+There are stacks for versions of the variables and stacks for versions of each
+computation.
+
+\pagebreak
+\begin{program}
+|preOrderTraversalOfTheDominatorTree()|
+|when an occurrence | o | of | E | is encountered: |
+\IF (o | is a |\phi| occurrence| ) \AR*
+    |a new version is created|
+    |\textbf{return}|
+\FI
+|compare the occurrence on top of the stack of | E
+|with the top of the stack of each operand in the computation |
+\IF (o |is a real occurrence | \land |all the versions match|) \AR*
+    |add an upward edge in the factored redundancy graph|
+    |from the occurrence to the top of the computation stack|
+\ELSIF (o |is a real occurrence | \land |some version doesn't match|) \AR*
+    |a new version is assigned to the occurrence|
+\ELSE 
+    \texttt{// the occurrence is a $\phi$ operand}
+    |assign the occurrence the special version |\bot
+\FI
+
+\end{program}
+
+\begin{itemize}
+\item 
+\end{itemize}
+
 %Hashbased value number
 %Global value numbering
 %Ssa pre (partial redundancy elimination)
