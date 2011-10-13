@@ -242,7 +242,7 @@ $kill(v)$ & definitions killed in $v$ \\
 \section*{Static Single Assignment Form}
 \begin{itemize}
 \item Every variable is defined as most once (statically)
-\item $\phi$-functions: one argument for each predecessor at some join vertices
+\item $\Phi$-functions: one argument for each predecessor at some join vertices
 \end{itemize}
 
 \subsubsection*{Dominance Frontiers}
@@ -282,7 +282,7 @@ not strictly dominate $w$.
     \OD
 \end{program}
 
-\subsubsection*{Insertion of $\phi$-functions}
+\subsubsection*{Insertion of $\Phi$-functions}
 \paragraph*{Theory}
 \begin{enumerate}
 \item Two paths $p = (v_0, ..., v_X)$ and $q = (w_0, ..., w_Y)$
@@ -299,7 +299,7 @@ paths which converge at $w$.
 \item $DF$ can be applied to sets of vertices, mapping $DF$ over all the
 vertices of its argument.
 \item $DF_{i+1}(A) = DF(A \cup DF_{i}(A))$, and $DF^+(A) = J^+(A)$.
-\item The set of vertices which need $\phi$-functions for any variable $v$
+\item The set of vertices which need $\Phi$-functions for any variable $v$
 is the iterated dominance frontier $DF_+(A)$, where $A$ is the set of vertices
 with assignment statements to $v$.
 \end{enumerate}
@@ -307,7 +307,7 @@ with assignment statements to $v$.
 \pagebreak
 \paragraph*{Algorithm}
 \begin{program}
-\PROC |insert_|\phi() \BODY
+\PROC |insert_|\Phi() \BODY
     |iteration| = 0
     \FOREACH | vertex | v \DO
         |hasAlready|[v] = 0
@@ -324,7 +324,7 @@ with assignment statements to $v$.
             v = |take vertex from | W
             \FOREACH w | in | DF(v) \DO
                 \IF (|hasAlready|[w] < |iteration|) \AR*
-                    |place | x = \phi(x,...,x) | at | w
+                    |place | x = \Phi(x,...,x) | at | w
                     |hasAlready|[w] = |iteration|
                     \IF (|work|[w] < |iteration|) \AR*
                         |work|[w] = |iteration|
@@ -361,9 +361,9 @@ with assignment statements to $v$.
     \OD
     \FOREACH w | in | succ(v) \DO
         j = |which predecessor is v to w? | \hspace{1cm} \texttt{// first, second, ... ?}
-        \FOREACH \phi|-function in | w \DO
+        \FOREACH \Phi|-function in | w \DO
             i = |S|[x].|top|()
-            |replace use of the | j |-th operand in | RHS(\phi) | by use of | x_i
+            |replace use of the | j |-th operand in | RHS(\Phi) | by use of | x_i
         \OD
     \OD
     \FOREACH w | in children|(v) \DO
@@ -494,7 +494,7 @@ $E_1$ is exposed with respect to $p$.
 denoted $\Omega$.
 \item The set of alterations of the value of $E$ is denoted $A$ (remember
         translation to SSA-form).
-\item A vertex $v$ in $G$ is a $\phi$-vertex for $E_0$ \iff
+\item A vertex $v$ in $G$ is a $\Phi$-vertex for $E_0$ \iff
     \begin{itemize}
         \item The beginning of $v$ dominates $E_0$
         \item There exist distinct $u_1$, $u_2 \in \Omega \cup A$ and paths $p_1$ 
@@ -503,7 +503,7 @@ denoted $\Omega$.
         converge in $v$.
     \end{itemize}
 \item An occurrence is \textbf{real} if it corresponds to code in the program,
-    $\phi$ if it is a $\phi$-function.
+    $\Phi$ if it is a $\Phi$-function.
 \item A computation $E$ is partially available at point $p$ in the program if
 there is a path from a real occurrence of the computation to $p$ that preserves
 $E$.
@@ -513,6 +513,12 @@ partially available from every path from program entry $s$ to $p$.
 just before $E_0$
 \item An occurrence $E_0$ is fully redundant if $E$ is fully available
 just before $E_0$
+\item The factored redundancy graph (FRG) of a computation $E$ is a directed
+graph $FRG(N_{occ}, E_{up})$. The set of nodes consists of all real occurrences
+of $E$ plus a $\Phi$ node for each $\Phi$-vertex of a real occurrence of $E$.
+The edges in FRG are called upward edges and there is an upward edge in $E_{up}$
+from each partially redundant real occurrence and partially redundant $\Phi$
+operand occurrence to its representative occurrence.
 \item Analogous: partially and fully anticipated
 \item A placement is safe if all inserted real occurrences of a computation are
 fully anticipated or fully available
@@ -522,19 +528,27 @@ program
 \end{enumerate}
 
 \paragraph*{Algorithm} 
-\paragraph*{$\phi$-insertion}
-A $\phi$ is needed whenever two different values of $E$ reach a common point in
+\begin{itemize}
+\item \texttt{insert-$\Phi$}
+\item \texttt{rename}
+\item \texttt{downsafety}
+\item \texttt{can\_be\_available}
+\item \texttt{finalize1}
+\item \texttt{finalize2}
+\end{itemize}
+\paragraph*{$\Phi$-insertion}
+A $\Phi$ is needed whenever two different values of $E$ reach a common point in
 the program. Therefore, there are two sets of vertices in whose iterated
-dominance frontier we will insert $\phi$-functions: the set $R$ of real
+dominance frontier we will insert $\Phi$-functions: the set $R$ of real
 occurrences of $E$ and the set $A$ of vertices with assignments to an operand of
 $E$. An assignment to an operand of $E$ is a computation of $E$ which produces
 the value $\bot$. 
 
-\textbf{Thus, we insert a $\phi$ at the beginning of every vertex in
+\textbf{Thus, we insert a $\Phi$ at the beginning of every vertex in
 $DF^+(R) \cup DF^+(A)$}.
 
 An \textbf{evaluation} of a computation $E$ is either a real occurrence, a
-$\phi$ occurrence or an assignment to an operand of $E$.
+$\Phi$ occurrence or an assignment to an operand of $E$.
 
 \paragraph*{Renaming}
 Two occurrences of $E$ with the same version number have equal values. 
@@ -542,31 +556,145 @@ The algorithm is based on the rename algorithm for the translation to SSA form.
 There are stacks for versions of the variables and stacks for versions of each
 computation.
 
-\pagebreak
+\negv
 \begin{program}
-|preOrderTraversalOfTheDominatorTree()|
+|pre-order traversal of the dominator tree|
 |when an occurrence | o | of | E | is encountered: |
-\IF (o | is a |\phi| occurrence| ) \AR*
+\IF (o | is a |\Phi| occurrence| ) \AR*
     |a new version is created|
-    |\textbf{return}|
+    \textbf{return}
 \FI
 |compare the occurrence on top of the stack of | E
 |with the top of the stack of each operand in the computation |
-\IF (o |is a real occurrence | \land |all the versions match|) \AR*
+\IF (o | is a real occurrence | \land |all the versions match|) \AR*
     |add an upward edge in the factored redundancy graph|
     |from the occurrence to the top of the computation stack|
-\ELSIF (o |is a real occurrence | \land |some version doesn't match|) \AR*
+\ELSIF (o | is a real occurrence | \land |some version doesn't match|) \AR*
     |a new version is assigned to the occurrence|
-\ELSE 
-    \texttt{// the occurrence is a $\phi$ operand}
+\ELSE %! FIX INDENTATION
+    \texttt{// the occurrence is a $\Phi$ operand}
     |assign the occurrence the special version |\bot
 \FI
-
 \end{program}
 
-\begin{itemize}
-\item 
-\end{itemize}
+\paragraph*{Computing downsafety}
+To insert a computation $E$ at point $p$ it is required that $E$ is anticipated
+at $p$. We may want to insert computations only at $\Phi$ operands that are 
+$\bot$. With no critical edges, if a computation is anticipated at a $\Phi$ it
+is also anticipated on each of its $\Phi$-operands. A $\Phi$ is not downsafe if
+there is a path from that $\Phi$ along which there is no real occurrence of the
+computation before program exit or before the computation's value has been
+altered. This algorithm checks the latter case, the first can be discovered
+during renaming if a $\Phi$ is on the top of a stack when the exit vertex is
+reached.
+
+\pagebreak
+\begin{program}
+\PROC |downsafety| \BODY
+    \FOREACH |f in | FGT \DO
+        \IF (!|downsafe|[f]) \AR*
+            \FOREACH |operand | \omega | of | f \DO
+                |resetDownsafe|(\omega)
+            \OD
+        \FI
+    \OD
+\end{program}
+\negv
+\begin{program}
+\PROC |resetDownsafe|(|operand | \omega) \BODY
+    \IF (|hasRealUse|[\omega] \lor |def|(\omega) | is not a | \Phi) \AR*
+        \textbf{return}
+    \FI
+    f = |def|[\omega]
+    \IF (!|downsafe|[f]) \AR* \textbf{return} \FI
+    |downsafe|[f] = false
+    \FOREACH |operand o | of f \DO
+        |resetDownsafe|(o)
+    \OD
+\end{program}
+
+\paragraph*{Availability}
+For some of the $\Phi$s with a $\bot$ operand we insert the computation for each
+of those $\bot$ operands. We cannot insert a computation for any $\Phi$ with a
+$\bot$ operand, but only for the $\Phi$s which are downsafe. \textbf{The 
+availability step finds the $\Phi$s where an expression can be safely made
+available and then finds the latest points to insert new computations in
+order to reduce the size of live ranges}.
+
+\texttt{canBeAvailable} searches the FRG from the $\Phi$s which are not downsafe
+and which have at least one $\bot$ operand. The \texttt{canBeAvailable}
+predicate is set to false for such $\Phi$s and the false value is propagated
+forward.
+
+Then, \texttt{computeLater} initialises the \texttt{later} predicate to the
+value of \\ \texttt{canBeAvailable}. The meaning of \texttt{later} is that if it is
+true for a $\Phi$, then we do not have to insert a new computation in that
+$\Phi$; we can insert the computation later. The \texttt{later} predicate is set
+to false for the $\Phi$ with an operand which has a real use. Postponing the
+insertion of the expression to after that real use will introduce redundancy,
+since on the path from the real use to the newly inserted computation, the
+computation is evaluated more than once.
+
+The \texttt{computeLater} then searches the FRG as shown in Algorithm 5.4
+Whether an expression will be available at a $\Phi$ is now given by:
+\begin{verbatim}
+willBeAvailable = canBeAvailable && !later
+\end{verbatim}
+Each $\Phi$ operand has a predicate \texttt{insert}, which determines whether a
+computation should be inserted at that operand, and it is true \iff the $\Phi$
+satisfies \texttt{willBeAVailable} and the operand is $\bot$ or defined by a
+$\Phi$ which does not satisfy \texttt{willBeAvailable}.
+
+\begin{program}
+\PROC |computeWillBeAvailable|() \BODY
+    |computeCanBeAvailable|
+    |computeLater|
+    \texttt{//willBeAvailable is canBeAvailable and NOT later}
+\end{program}
+\negv
+\begin{program}
+\PROC |computeCanBeAvailable|() \BODY
+    \FOREACH |f in | FGT \DO
+        |canBeAvailable|[f] = true
+    \OD
+    \FOREACH |f in | FGT \DO
+        \IF (!|downsafe|[f] \land |canBeAvailable|[f] \land | there is an operand of | f | that is | \bot) \AR*
+            |resetCanBeAvailable|(f)
+        \FI
+    \OD
+\end{program}
+\negv
+\begin{program}
+\PROC |resetCanBeAvailable|(f) \BODY
+    |canBeAvailable|[f] = false
+    \FOREACH |g in | FGT | with operand | \omega | such that | f = |def|(\omega) \DO
+        \IF (!|hasRealUse|(\omega) \ \land \ !|downsafe|[g] \land | canBeAvailable|[g]) \AR*
+            |resetCanBeAvailable|(g)
+    \OD
+\end{program}
+\negv
+\begin{program}
+\PROC |computeLater|() \BODY
+    \FOREACH |f in | FGT \DO
+        |later|[f] = |canBeAvailable|[f]
+    \OD
+    \FOREACH |f in | FGT \DO
+        \IF (|later|[f] \land | an operand | \omega | of | f | satisfies hasRealUse|[\omega] | and def|[\omega] \not= \bot) \AR*
+            |resetLater|(f)
+        \FI
+    \OD
+\end{program}
+\negv
+\begin{program}
+\PROC |resetLater|(f) \BODY
+    |later|[f] = false
+    \FOREACH |g in | FGT | with operand | \omega | such that | f = |def|(\omega) \DO
+        \IF (|later|[g]) \AR*
+            |resetLater|(g)
+    \OD
+\end{program}
+
+    
 
 %Hashbased value number
 %Global value numbering
