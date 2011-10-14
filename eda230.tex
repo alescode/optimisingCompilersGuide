@@ -164,6 +164,10 @@ $parent$ is the parent in the DFS tree after calling $dfs()$.
 \item Reducible or natural loops only have one entry point: the loop header. 
 It dominates all other vertices in the loop.
 \end{enumerate}
+\begin{tabular}{ll}
+forward arc & $u < v$\\
+back arc & $u > v \ \land $ v is left in the stack\\
+\end{tabular}
 \negv
 \begin{program}
 \PROC |identifyNaturalLoops|() \BODY
@@ -375,14 +379,52 @@ with assignment statements to $v$.
         |S|[x].|pop|()
     \OD
 \end{program}
-
 \section*{SSA Optimisation}
+\subsubsection*{Copy propagation}
+\begin{verbatim}
+int x;
+int t;
+t = a + b;
+x = t;
+\end{verbatim} \vspace{-0.3cm}
+is translated into... \vspace{-0.3cm}
+\begin{verbatim}
+int t;
+t = a + b;
+\end{verbatim}
+
+\begin{itemize}
+\item It considers all copy statements such as \texttt{x = t} in a procedure and
+propagates the source by replacing uses of the destination by uses of the source
+instead.
+\item If the destination is no longer used anywhere, it can be removed.
+\item When SSA form is not used, copy propagation cannot be performed without
+limitations: careful about redefinitions. One can use iterative dataflow
+analysis.
+\item Consider \texttt{x = t} and an expression \texttt{x + y} to which we want
+to propagate \texttt{t}. On SSA form, it is always legal to propagate \texttt{t}
+by replacing uses of \texttt{x} with uses of \texttt{t}. Recall that \textbf{at
+any use of a variable, there is exactly one reaching definition of such a
+variable and the definition of the variable dominates its use}.
+\item Copy propagation can be performed during variable renaming: when the
+statement is a copy statement \texttt{x = t}, the original renaming algorithm
+replaces \texttt{t} with the top of the stack of \texttt{t}, say \texttt{t'},
+and then replaces \texttt{x} with a new version of \texttt{x} which is
+pushed on stack \texttt{x}. The new copy statement becomes \texttt{x' =
+t'}. To do copy propagation during renaming, we simply push
+\texttt{t'} on the stack of \texttt{x} and delete the copy
+statement.
+
+\end{itemize}
+
+
+\pagebreak
+\section*{ADVANCED - SSA Optimisation}
 \subsubsection*{Partial Redundancy Elimination (PRE)}
 \paragraph*{Basics}
 \begin{itemize}
 \item Attempt to calculate expressions only once
 \item Partial redundancy: one of the expressions is inside an \texttt{if-else}
-\pagebreak
 \item Case examples
     \begin{enumerate}
         \item 
@@ -476,688 +518,688 @@ z = t
 \item Common subexpression elimination and code motion of loop invariants are
 subsumed by PRE
 \end{itemize}
-
-\paragraph*{Theory}
-\begin{enumerate}
-\item Two operands $a_j$ and $b_k$ are equal \iff $a = b$
-\item A computation $E_1$ at some point in the program is an occurrence of
-computation $E$ if both perform the same operation and have equal operands
-\item A computation $E$ is preserved along a path $P$ if $P$ contains nothing
-that may alter the value of $E$.
-\item If $E_1$ and $E_2$ are occurrences of $E$, and there is a path in the
-program from $E_1$ to $E_2$ which preserves $E$, then $E_2$ is said to be
-redundant with respect to $E_1$.
-\item If $p$ is a point in the program and there is a path from $p$ to $E_1$
-which preserves $E$ and contains no occurrence of $E$ between $p$ and $E_1$, 
-$E_1$ is exposed with respect to $p$.
-\item The set of occurrences to which $E_0$ is both redundant and exposed is
-denoted $\Omega$.
-\item The set of alterations of the value of $E$ is denoted $A$ (remember
-        translation to SSA-form).
-\item A vertex $v$ in $G$ is a $\Phi$-vertex for $E_0$ \iff
-    \begin{itemize}
-        \item The beginning of $v$ dominates $E_0$
-        \item There exist distinct $u_1$, $u_2 \in \Omega \cup A$ and paths $p_1$ 
-        and $p_2$ such that $u_1$ is contained in the first vertex of $p_1$, 
-        $u_2$ is contained in the first vertex of $p_2$, and $p_1$ and $p_2$
-        converge in $v$.
-    \end{itemize}
-\item An occurrence is \textbf{real} if it corresponds to code in the program,
-    $\Phi$ if it is a $\Phi$-function.
-\item A computation $E$ is partially available at point $p$ in the program if
-there is a path from a real occurrence of the computation to $p$ that preserves
-$E$.
-\item A computation $E$ is fully available at point $p$ in the program if it is
-partially available from every path from program entry $s$ to $p$.
-\item An occurrence $E_0$ is partially redundant if $E$ is partially available
-just before $E_0$
-\item An occurrence $E_0$ is fully redundant if $E$ is fully available
-just before $E_0$
-\item The factored redundancy graph (FRG) of a computation $E$ is a directed
-graph $FRG(N_{occ}, E_{up})$. The set of nodes consists of all real occurrences
-of $E$ plus a $\Phi$ node for each $\Phi$-vertex of a real occurrence of $E$.
-The edges in FRG are called upward edges and there is an upward edge in $E_{up}$
-from each partially redundant real occurrence and partially redundant $\Phi$
-operand occurrence to its representative occurrence.
-\item Analogous: partially and fully anticipated
-\item A placement is safe if all inserted real occurrences of a computation are
-fully anticipated or fully available
-\item A placement is computationally optimal if no safe placement can result in
-fewer occurrences of the computation along any path from entry to exit in the
-program
-\end{enumerate}
-
-\paragraph*{Algorithm} 
-\begin{itemize}
-\item \texttt{insert-$\Phi$}
-\item \texttt{rename}
-\item \texttt{downsafety}
-\item \texttt{canBeAvailable}
-\item \texttt{finalise1}
-\item \texttt{finalise2}
-\item \texttt{codeMotion}
-\end{itemize}
-\paragraph*{$\Phi$-insertion}
-A $\Phi$ is needed whenever two different values of $E$ reach a common point in
-the program. Therefore, there are two sets of vertices in whose iterated
-dominance frontier we will insert $\Phi$-functions: the set $R$ of real
-occurrences of $E$ and the set $A$ of vertices with assignments to an operand of
-$E$. An assignment to an operand of $E$ is a computation of $E$ which produces
-the value $\bot$. 
-
-\textbf{Thus, we insert a $\Phi$ at the beginning of every vertex in
-$DF^+(R) \cup DF^+(A)$}.
-
-An \textbf{evaluation} of a computation $E$ is either a real occurrence, a
-$\Phi$ occurrence or an assignment to an operand of $E$.
-
-\paragraph*{Renaming}
-Two occurrences of $E$ with the same version number have equal values. 
-The algorithm is based on the rename algorithm for the translation to SSA form.
-There are stacks for versions of the variables and stacks for versions of each
-computation.
-
-\negv
-\begin{program}
-|pre-order traversal of the dominator tree|
-|when an occurrence | o | of | E | is encountered: |
-\IF (o | is a |\Phi| occurrence| ) \AR*
-    |a new version is created|
-    \textbf{return}
-\FI
-|compare the occurrence on top of the stack of | E
-|with the top of the stack of each operand in the computation |
-\IF (o | is a real occurrence | \land |all the versions match|) \AR*
-    |add an upward edge in the factored redundancy graph|
-    |from the occurrence to the top of the computation stack|
-\ELSIF (o | is a real occurrence | \land |some version doesn't match|) \AR*
-    |a new version is assigned to the occurrence|
-\ELSE %! FIX INDENTATION
-    \texttt{// the occurrence is a $\Phi$ operand}
-    |assign the occurrence the special version |\bot
-\FI
-\end{program}
-
-\paragraph*{Computing downsafety}
-To insert a computation $E$ at point $p$ it is required that $E$ is anticipated
-at $p$. We may want to insert computations only at $\Phi$ operands that are 
-$\bot$. With no critical edges, if a computation is anticipated at a $\Phi$ it
-is also anticipated on each of its $\Phi$-operands. A $\Phi$ is not downsafe if
-there is a path from that $\Phi$ along which there is no real occurrence of the
-computation before program exit or before the computation's value has been
-altered. This algorithm checks the latter case, the first can be discovered
-during renaming if a $\Phi$ is on the top of a stack when the exit vertex is
-reached.
-
-\pagebreak
-\begin{program}
-\PROC |downsafety| \BODY
-    \FOREACH |f in | FGT \DO
-        \IF (!|downsafe|[f]) \AR*
-            \FOREACH |operand | \omega | of | f \DO
-                |resetDownsafe|(\omega)
-            \OD
-        \FI
-    \OD
-\end{program}
-\negv
-\begin{program}
-\PROC |resetDownsafe|(|operand | \omega) \BODY
-    \IF (|hasRealUse|[\omega] \lor |def|(\omega) | is not a | \Phi) \AR*
-        \textbf{return}
-    \FI
-    f = |def|[\omega]
-    \IF (!|downsafe|[f]) \AR* \textbf{return} \FI
-    |downsafe|[f] = false
-    \FOREACH |operand o | of f \DO
-        |resetDownsafe|(o)
-    \OD
-\end{program}
-
-\paragraph*{Availability}
-For some of the $\Phi$s with a $\bot$ operand we insert the computation for each
-of those $\bot$ operands. We cannot insert a computation for any $\Phi$ with a
-$\bot$ operand, but only for the $\Phi$s which are downsafe. \textbf{The 
-availability step finds the $\Phi$s where an expression can be safely made
-available and then finds the latest points to insert new computations in
-order to reduce the size of live ranges}.
-
-\texttt{canBeAvailable} searches the FRG from the $\Phi$s which are not downsafe
-and which have at least one $\bot$ operand. The \texttt{canBeAvailable}
-predicate is set to false for such $\Phi$s and the false value is propagated
-forward.
-
-Then, \texttt{computeLater} initialises the \texttt{later} predicate to the
-value of \\ \texttt{canBeAvailable}. The meaning of \texttt{later} is that if it is
-true for a $\Phi$, then we do not have to insert a new computation in that
-$\Phi$; we can insert the computation later. The \texttt{later} predicate is set
-to false for the $\Phi$ with an operand which has a real use. Postponing the
-insertion of the expression to after that real use will introduce redundancy,
-since on the path from the real use to the newly inserted computation, the
-computation is evaluated more than once.
-
-The \texttt{computeLater} then searches the FRG as shown in Algorithm 5.4
-Whether an expression will be available at a $\Phi$ is now given by:
-\begin{verbatim}
-willBeAvailable = canBeAvailable && !later
-\end{verbatim}
-Each $\Phi$ operand has a predicate \texttt{insert}, which determines whether a
-computation should be inserted at that operand, and it is true \iff the $\Phi$
-satisfies \texttt{willBeAVailable} and the operand is $\bot$ or defined by a
-$\Phi$ which does not satisfy \texttt{willBeAvailable}.
-
-\begin{program}
-\PROC |computeWillBeAvailable|() \BODY
-    |computeCanBeAvailable|
-    |computeLater|
-    \texttt{//willBeAvailable is canBeAvailable and NOT later}
-\end{program}
-\negv
-\begin{program}
-\PROC |computeCanBeAvailable|() \BODY
-    \FOREACH |f in | FGT \DO
-        |canBeAvailable|[f] = true
-    \OD
-    \FOREACH |f in | FGT \DO
-        \IF (!|downsafe|[f] \land |canBeAvailable|[f] \land | there is an operand of | f | that is | \bot) \AR*
-            |resetCanBeAvailable|(f)
-        \FI
-    \OD
-\end{program}
-\negv
-\begin{program}
-\PROC |resetCanBeAvailable|(f) \BODY
-    |canBeAvailable|[f] = false
-    \FOREACH |g in | FGT | with operand | \omega | such that | f = |def|(\omega) \DO
-        \IF (!|hasRealUse|(\omega) \ \land \ !|downsafe|[g] \land | canBeAvailable|[g]) \AR*
-            |resetCanBeAvailable|(g)
-    \OD
-\end{program}
-\negv
-\begin{program}
-\PROC |computeLater|() \BODY
-    \FOREACH |f in | FGT \DO
-        |later|[f] = |canBeAvailable|[f]
-    \OD
-    \FOREACH |f in | FGT \DO
-        \IF (|later|[f] \land | an operand | \omega | of | f | satisfies hasRealUse|[\omega] | and def|[\omega] \not= \bot) \AR*
-            |resetLater|(f)
-        \FI
-    \OD
-\end{program}
-\negv
-\begin{program}
-\PROC |resetLater|(f) \BODY
-    |later|[f] = false
-    \FOREACH |g in | FGT | with operand | \omega | such that | f = |def|(\omega) \DO
-        \IF (|later|[g]) \AR*
-            |resetLater|(g)
-    \OD
-\end{program}
-
-\paragraph*{Finalise}
-It performs insertions and deletions of real occurrences and the saving and
-reloading of the temporary $t$ associated with the expression.
-
-These are the tasks for \texttt{finalise1}:
-\begin{itemize}
-\item To set a flag called \texttt{reload} for each real occurrence, which
-specifies whether the occurrence should fetch the value by reading a temporary
-$t_k$ (with $k$ denoting $t$'s SSA version) or it should perform the computation
-itself.
-\item For $\Phi$s which satisfy \texttt{willBeAvailable}, the expression is
-inserted at incoming edges where the expression is not available
-\item Determining which $\Phi$s will become $\phi$s for $t$
-\item Updating the FRG so that $t$ becomes a variable in SSA form
-\end{itemize}
-\texttt{finalise1} makes a preorder traversal of the DT to find which definition
-of $t_k$ should be used by the real occurrence whose \texttt{reload} flag is
-true. In contrast with SSA renaming, \texttt{finalise1} does not need rename
-stacks. Instead, a table called \texttt{availableDef} of available definitions
-is used for the three first tasks of \texttt{finalise1}. \texttt{availableDef}
-is indexed by redundancy class numbers, and \texttt{availableDef[x]} points to
-the occurrence that defines the value of occurrences in redundancy class $x$
-when a reload of class $x$ is seen. This defining occurrence is either a real
-occurrence or a $\Phi$ which satisfies \texttt{willBeAvailable}.
-
-\begin{program}
-\PROC finalise1() \BODY
-    E = | the current expression|
-    \FOREACH | redundancy class | x | of | E \DO
-        |availableDef|[x] = \bot
-    \OD
-    \FOREACH | occurrence | \psi | of | E | in a preorder DT traversal | \DO
-        x = |class|(\psi)
-        \IF (\psi | is a | \Phi | occurrence|) \AR*
-            \IF (|willBeAvailable|[\psi]) \AR*
-            |availableDef|[x] = \psi
-            \FI
-        \ELSIF (\psi | is a real occurrence|) \AR*
-            \IF (|availableDef|[x] = \bot \lor |availableDef|[x] | does not dominate | \psi) \AR*
-                |reload|[\psi] = false
-                |availableDef|[x] = \psi
-            \ELSE
-                |reload|[\psi] = true
-                |def|[\psi] = |availableDef|[x]
-            \FI
-        \ELSE \texttt{  // $\psi$ is a $\Phi$ operand occurrence}
-            f = | the | \Phi | in the successor vertex of this operand |
-            \IF (|willBeAvailable|[f]) \AR*
-                \IF (\psi | satisfies insert|) \AR*
-                    |insert | E | at the end of the vertex containing | \psi
-                    |def|[\psi] = |inserted occurrence|
-                \ELSE
-                    |def|[\psi] = |availableDef|[x]
-                \FI
-            \FI
-        \FI
-    \OD
-\end{program}
-Initially, all entries of \texttt{availableDef} are $\bot$ and during the
-preorder traversal they will be updated as follows. $x$ is the redundancy class
-number of the occurrence we visit.
-\begin{itemize}
-\item We visit a $\Phi$. If the $\Phi$ satisfies \texttt{willBeAvailable}, we
-visit the redundancy class $x$ of this $\Phi$ for the first time and therefore
-set \texttt{availableDef[x] = $\Phi$}. If the $\Phi$ does not satisfy
-\texttt{willBeAvailable}, this $\Phi$ will not be part of the SSA graph for $t$
-and we do nothing.
-\item We visit a real occurrence $r$. If \texttt{availableDef[x] = $\bot$} or
-\texttt{availableDef[x]} does not dominate this occurrence (which can happen,
-for instance, if \texttt{availableDef[x]} was set at a then-clause and
-we are processing a vertex in the else-clause), \textbf{then} we set
-\texttt{availableDef[x] = $\Phi$}. If \texttt{availableDef[x] $\not= \bot$} and
-\texttt{availableDef[x]} dominates this occurrence then we record
-\texttt{availableDef[x]} as the defining occurrence of \texttt{r}: \texttt{def[r] =
-    availableDef[x]} and set the \texttt{reload} flag to true.
-\item We visit a $\Phi$ operand $\omega$. If $\omega$'s $\Phi$ is not
-\texttt{willBeAvailable}, then nothing is done. Otherwise, if $\omega$ satisfies
-insert we insert a new real occurrence \texttt{occ} at $\omega$ and set
-\texttt{def[$\omega$] = occ}, and if $\omega$ does not satisfy insert we set
-\texttt{def[$\omega$] = availableDef[x]}.
-\end{itemize}
-
-These are the tasks for \texttt{finalise2}:
-\begin{itemize}
-\item To set a flag called \texttt{save} for real occurrences which should save
-their computation to $t$ for use by subsequent reloads by other real
-occurrences
-\item Remove extraneous $\Phi$s
-\end{itemize}
-
-\pagebreak
-\begin{program}
-\PROC |finalise2|() \BODY
-    \FOREACH f | in FRG satisfying willBeAvailable | \DO
-        |extraneous|[f] = true
-    \OD
-    \FOREACH | real occurrence | \psi \DO
-        |save|[\psi] = false
-    \OD
-    \FOREACH f | in FGR | \DO
-        \FOREACH | operand | \omega | of | f \DO
-            |processed|[\omega] = false
-        \OD
-    \OD
-    \FOREACH | real occurrence | \psi | satisfying reload| \DO
-        |setSave|(|def|(\psi))
-    \FOREACH F | in FGR | \DO
-        \IF (f | satisfies willBeAvailable|) \AR*
-            \IF (|extraneous|[f]) \AR*
-                \FOREACH | operand | \omega | of | f \DO
-                    \IF (|def|[\omega] | is a | \Phi | and not extraneous|[|def|[\omega]]
-                         \lor | def|[\omega] | is real | \lor
-                         \lor | def|[\omega] | is inserted|) \AR*
-                        |setReplacement|(f, |def|[\omega])
-                    \ELSE
-                        F = F - \{f\}
-                    \FI
-                \OD
-            \FI
-        \FI
-    \OD
-\end{program}
-
-\begin{program}
-\PROC |setSave|(\psi) \BODY
-    \IF (\psi | is a real occurrence|) \AR*
-        |save|(\psi) = true
-    \ELSIF (\psi | is a | \Phi | occurrence|) \AR*
-        \FOREACH |operand | \omega | of | \psi \DO
-            \IF (!|processed|[\omega]) \AR*
-                |setSave|(|def|[w])
-            \FI
-        \OD
-    \FI
-    \IF (\psi | is real or inserted occurrence|) \AR*
-        \FOREACH (|willBeAvailable | f | in FRG such that | f \in DF^+(\psi)) \DO
-            |extraneous|[f] = false
-        \OD
-    \FI
-\end{program}
-\pagebreak
-\begin{program}
-\PROC |setReplacement|(g, |replacingDefinition|) \BODY
-    \FOREACH |willBeAvailable | f | in FGR with j-th operand defined by | g \DO
-        \IF (|extraneous|[f]) \AR*
-            |setReplacement|(|f|, |replacingDefinition|)
-        \ELSE
-            |replace j-th operand by replacingDefinition|
-        \FI
-        \FOREACH |real occurrence | \psi | satisfying reload with def|[\psi] = g \DO
-            F = F - \{g\}
-        \OD
-    \OD
-\end{program}
-
-\paragraph*{Code motion}
-The last part of SSAPRE updates the program with the temporary expressions on
-SSA form. In a preorder traversal of the dominator tree, each occurrence is
-processed as follows: if \texttt{save} is true, a new version of the temporary
-is created and code is inserted to save the value of the expression in the
-temporary. If the occurrence $\omega$ is a real or a $\Phi$ operand and the
-reload flag is true, the computation is replaced by the use of the temporary
-saved by \texttt{def($\omega$)}. At each inserted occurrence, the value is saved
-in a new version of the temporary, and at a $\Phi$ a $\phi$-function for the
-temporary is created.
-
-\subsubsection*{Global Value Numbering (GNV)}
-It aims at removing redundant computations. PRE discovers redundant evaluations
-of some expression with particular lexical operator and operands, while GNV can
-eliminate redundancy between lexically different expressions that produce the
-same value.
-\begin{verbatim}
-x = a + a;
-y = a * 2; // redundant
-\end{verbatim}
-It does not optimise partial redundancy.
-Trend: use GNV, then PRE.
-
-\paragraph*{Hash-based value numbering: a simpler version}
-This is an improvement to the renaming stage of the translation to SSA form.
-
-\pagebreak
-\begin{program}
-\PROC |search|(|vertex | v) \BODY
-    |oldLHS| = |new List|
-    |enter new scope in hash table | (|hashTable|[v])
-    \FOREACH | statement | s | in | v \DO
-        \FOREACH | variable | x | in | RHS(s) \DO
-            i = |S|[x].|top|()
-            |replace use of | x | by use of | x_i
-        \OD
-        x = |LHS|(s)
-        \IF (x = null) \AR*
-            \textbf{continue}
-        \FI
-        |oldLHS|.|add|(x)
-        |simplify | s | using e.g. | x_i - x_i = 0
-        h = |hashTable|[v][|RHS|(s)]
-        \IF (h | was found|) \AR*
-            |push (left-hand side) | h | onto S|[x]
-        \ELSE
-            i = |C|[x]
-            |replace | x | by | x_i
-            |S|[x].|push|(i)
-            |C|[x] \texttt{ += } 1
-            |hashTable|[v][|RHS|(s)] = |LHS|(s)
-        \FI
-    \OD
-    \FOREACH w | in | succ(v) \DO
-        j = |which predecessor is v to w? | \hspace{1cm} \texttt{// first, second, ... ?}
-        \FOREACH \Phi|-function in | w \DO
-            i = |S|[x].|top|()
-            |replace use of the | j |-th operand in | RHS(\Phi) | by use of | x_i
-        \OD
-    \OD
-    \FOREACH w | in children|(v) \DO
-        |search|(w)
-    \texttt{// pop every variable version pushed in v}
-    \FOREACH | variable | x | in | oldLHS(s) \DO
-        |S|[x].|pop|()
-    \OD
-\end{program}
-
-\paragraph*{Global value numbering}
-\begin{itemize}
-\item Constructs a value graph from the SSA graph. Nodes are values, labeled as
-variables, constants or operations. A $\phi$ function is labeled by its vertex
-in the CFG. There is an edge in the VG from a node which uses a value to the
-node that defines the value. The edges going from a node are ordered.
-\item Initially makes a partition $\pi_0$ where all nodes with the same function
-label are assumed to be congruent and belong to the same $B_i$. All 
-$\phi$-functions, multiplications and so on belong to different $B_i$s.
-\item We want a partition which gives us as many equal values as possible,
-satisfying the following rule:
-\item Two nodes in the value graph are congruent \iff the nodes have identical
-function labels and the corresponding heads of the edges leaving the nodes are
-congruent
-\end{itemize}
-
-\paragraph*{$O(N^2)$ algorithm}
-The algorithm checks all blocks to see if any should be split into two:
-when it discovers that two nodes in the same block which are not congruent.
-
-\begin{program}
-\PROC N^2-|partition|() \BODY
-    \pi_0 = \{B_0, B_1, ..., B_p\}
-    i = 0
-    |change| = true
-    \WHILE (|change|) \DO
-        |change| = false
-        k = 0
-        \FOREACH B_j | in | \pi_i \DO
-            v = |node from | B_j
-            |create a new block | B_k | in | \pi_{i+1}
-            |put | v | in | B_k | in | \pi_{i+1}
-            \FOREACH | node | w \in B_j \DO
-                \IF (|match|(v, w)) \AR*
-                    |add | w | to | B_k | in | \pi_{i+1}
-                \ELSE
-                    |change| = true
-                    |add | w | to | B_{k+1}
-                \FI
-            \OD
-        k \texttt{ += } 1
-    \OD
-    i \texttt{ += } 1
-\end{program}
-\negv
-\begin{program}
-\FUNCT |match|(|node | v, | node | w) \BODY
-    \FOR i = 1 | until the number of operands of | v \DO
-        a_v = |head of | i|-th edge of | v
-        a_w = |head of | i|-th edge of | w
-        \IF (a_v | and | a_w | belong to different blocks|) \AR*
-            \textbf{return } false
-        \FI
-    \OD
-    \textbf{return } true
-\end{program}
-
-\paragraph*{$O(N log N)$ algorithm}
-\begin{itemize}
-\item A block $B_j$ is split into two new blocks using $B_i$ such that\\
-$B_k = \{v \mid v \in B_j \land f(v) \in B_i\}$ and $B_{k+1} = \{v \mid v \in
-B_j \land f(v) \not\in B_i\}$
-\item For each block $B_i \subseteq S$, $f^{-1}(B) = \{v \mid f(v) \in B\}$
-\item A partition $\phi$ is safe with respect to a $T \subseteq S$ if for each
-block $B_i$ we have either $B_i \subseteq f^{-1}(T)$ or $B_i \ \cap f^{-1}(T) =
-\emptyset$
-\end{itemize}
-\negv
-\begin{program}
-\PROC |partitionValueGraph|() \BODY
-    |workList| = \{B_1, B_2,..., B_p\}
-    q = p
-    \WHILE (|workList| \not= \emptyset) \DO
-        |take a | B_i | from worklist|
-        \FOREACH | position | p | of a use of | x \in B_i \DO
-            |inverse| = \emptyset
-            \FOREACH x \in B_i \DO
-                |add all uses of | x | in position | p | to inverse|
-            \OD
-            \FOREACH j | such that | B_j \cap | inverse | \not= \emptyset \land \ B_j \not\subseteq |inverse| \DO
-                     q \texttt{ += } 1
-                     |create new class | B_q
-                     B_q = B_j \cap |inverse|
-                     B_j = B_j - B_q
-                     \IF (B_j \in |workList|)
-                        |add | B_q | to workList|
-                    \ELSE
-                        |add | min(B_j, B_q) | to workList|
-                    \FI
-            \OD
-        \OD
-    \OD
-\end{program}
-
-After a safe partition has been found, we apply:
-\begin{program}
-\PROC |dominatorBasedGVN|() \BODY
-    \FOREACH | block | B_i \in \pi \DO
-        \FOREACH |pair of nodes | (v, w) | in | B_i \times B_i \DO
-            \IF (v = w) \textbf{ continue} \FI
-            \IF (|def|[v] | dominates def|[w]) \AR*
-                |replace all uses of | w | by uses of | v
-                |remove def|[w]
-            \FI
-        \OD
-    \OD
-\end{program}
-
-\subsubsection*{Operator strength reduction - Induction variable elimination}
-The main purpose is to transform multiplications occurring inside a loop to
-additions.
-\begin{program}
-\PROC |operatorStrengthReduce|() \BODY
-    |dfsNumIndex| = 0
-    |stack| = |new Stack|
-    \FOREACH |vertex | v | in SSA Graph | \DO
-        \IF (|dfsNum|[v] = null) \AR*
-            strongConnect(v)
-        \FI \OD
-\end{program} \negv
-\begin{program}
-\PROC |strongConnect|(|vertex | v) \BODY
-    |dfsNum|[v] = |dfsNumIndex|
-    |lowLink|[v] = |dfsNumIndex|
-    |dfsNumIndex| \texttt{ += } 1
-    |stack|.|push|(v)
-    \FOREACH w | in | operands(v) \DO
-        \IF (|dfsNum|[w] = null) \AR*
-            |strongConnect|(w)
-            |lowLink|[v] = min(|lowLink|[v], |lowLink|[w])
-        \ELSIF (|dfsNum|[w] < |dfsNum|[v] \land |stack|.|contains|(w)) \AR*
-            |lowLink|[v] = min(|lowLink|[v], |dfsNum|[w]) \FI
-    \OD
-    \IF (|lowLink|[v] = |dfsNum|[v]) \AR*
-        |scc| = |new Set|
-        \DOW
-            w = |stack|.|pop|()
-            |scc|.|add|(w)
-        \ODW (w \not= v)
-        |processSCC|(|scc|)
-    \FI
-\end{program} \negv
-\begin{program}
-\PROC |processSCC|(|Set scc|) \BODY
-    \IF (|scc has a single member | n) \AR*
-        \IF (|validForm|(n)) \AR*
-            |replace|(n, iv, rc)
-        \ELSE
-            |header|[n] = \bot
-        \FI
-    \ELSE
-        |classify|(|scc|)
-\end{program} \negv
-\begin{program}
-\FUNCT |validForm|(n) \AR*
-    \IF (n | is of form | \texttt{x = iv $\times$ rc } (|or with | iv | and | rc | inverted|)
-         \lor \ n | is of form | \texttt{x = iv $\pm$ rc } (|or with | iv | and | rc | inverted|)
-         \textbf{return } true \FI
-    \textbf{return } false
-\end{program}\negv
-\begin{program}
-\PROC |replace|(|operation|, iv, rc) \BODY
-    |result| = |reduce|(|opCode|(operation), iv, rc)
-    |replace operation with mov using result as source|
-    |header|[|operation|] = |header|[iv]
-\end{program} \negv
-
-\begin{program}
-\FUNCT |reduce|(|operation|, iv, rc) \BODY
-    |result| = |lookup|(|opCode|, iv, rc)
-    \IF |result is not found| \AR*
-        |result| = |new temp|()
-        |install|(|opCode|, iv, rc, |result|)
-        |newDef| = |copyDef|(iv, |result|)
-        \FOREACH |operand | \omega | in newDef| \DO
-            \IF (\omega | is an induction variable |) \AR*
-                |replace | \omega | with reduce|(|opCode|, \omega, rc)
-            \ELSIF (|opCode| = \times \ \lor \ |newDef is a | \phi) \AR*
-                |replace | \omega | with apply|(|opCode|, \omega, rc)
-            \FI
-        \OD
-    \FI
-    \textbf{return } |result|
-\end{program} \negv
-\begin{program}
-\FUNCT |apply|(|opCode|, |op1|, |op2|) \BODY
-    |result| = |lookup|(|opCode|, |op1|, |op2|)
-    \IF |result is not found| \AR*
-        \IF |op1 is an induction variable | \land | op2 is a region constant| \AR*
-            |result| = |reduce|(|opcode|, |op1|, |op2|)
-        \ELSIF |op2 is an induction variable | \land | op1 is a region constant| \AR*
-            |result| = |reduce|(|opcode|, |op2|, |op1|)
-        \ELSE
-            |result| = |new temp|()
-            |install|(|opCode|, op1, op2, |result|)
-            |choose the location where the operation will be inserted|
-            |perform constant folding if possible|
-            |create a new operation at the chosen location|
-    \FI
-    \textbf{return } |result|
-\end{program} \pagebreak
-\begin{program}
-\PROC |classify|(|Set scc|) \BODY
-    \FOREACH n \in |scc| \DO
-        \IF (|rpo|[|vertex|(n)] < |rpo|[|header|]) \AR*
-            |header| = |vertex|(n)
-        \FI
-    \OD
-    \FOREACH n \in |scc| \DO
-        \IF (|operator|(n) \not\in \{\phi, +, -, |move|\}) \AR*
-            |sccIsInduction| = false
-        \ELSE
-            \FOREACH |operand | \omega \in |operands|(n) \DO
-                \IF (\omega \not\in |scc | \land \ !|regionConst|(\omega, |header|)) \AR*
-                    |sccIsInduction| = false
-                \ELSE
-                    |sccIsInduction| = true
-                    \textbf{break}
-                \FI
-            \OD
-        \FI
-    \OD
-    \IF (|sccIsInduction|) \AR*
-        \FOREACH n \in |scc| \DO
-            |header|[n] = |header|
-        \OD
-    \ELSE
-        \FOREACH n \in |scc| \DO
-            \IF (|validForm|(n)) \AR*
-                |replace|(n, iv, rc)
-            \ELSE
-                |header|(n) = \bot
-            \FI
-        \OD
-    \FI
-\end{program} \negv
-\begin{program}
-\FUNCT |regionConst|(x, |header|) \BODY
-    \textbf{return } x | is constant | \lor | vertex|(x) | strictly dominates header |
-\end{program}\negv
+%
+%\paragraph*{Theory}
+%\begin{enumerate}
+%\item Two operands $a_j$ and $b_k$ are equal \iff $a = b$
+%\item A computation $E_1$ at some point in the program is an occurrence of
+%computation $E$ if both perform the same operation and have equal operands
+%\item A computation $E$ is preserved along a path $P$ if $P$ contains nothing
+%that may alter the value of $E$.
+%\item If $E_1$ and $E_2$ are occurrences of $E$, and there is a path in the
+%program from $E_1$ to $E_2$ which preserves $E$, then $E_2$ is said to be
+%redundant with respect to $E_1$.
+%\item If $p$ is a point in the program and there is a path from $p$ to $E_1$
+%which preserves $E$ and contains no occurrence of $E$ between $p$ and $E_1$, 
+%$E_1$ is exposed with respect to $p$.
+%\item The set of occurrences to which $E_0$ is both redundant and exposed is
+%denoted $\Omega$.
+%\item The set of alterations of the value of $E$ is denoted $A$ (remember
+%        translation to SSA-form).
+%\item A vertex $v$ in $G$ is a $\Phi$-vertex for $E_0$ \iff
+%    \begin{itemize}
+%        \item The beginning of $v$ dominates $E_0$
+%        \item There exist distinct $u_1$, $u_2 \in \Omega \cup A$ and paths $p_1$ 
+%        and $p_2$ such that $u_1$ is contained in the first vertex of $p_1$, 
+%        $u_2$ is contained in the first vertex of $p_2$, and $p_1$ and $p_2$
+%        converge in $v$.
+%    \end{itemize}
+%\item An occurrence is \textbf{real} if it corresponds to code in the program,
+%    $\Phi$ if it is a $\Phi$-function.
+%\item A computation $E$ is partially available at point $p$ in the program if
+%there is a path from a real occurrence of the computation to $p$ that preserves
+%$E$.
+%\item A computation $E$ is fully available at point $p$ in the program if it is
+%partially available from every path from program entry $s$ to $p$.
+%\item An occurrence $E_0$ is partially redundant if $E$ is partially available
+%just before $E_0$
+%\item An occurrence $E_0$ is fully redundant if $E$ is fully available
+%just before $E_0$
+%\item The factored redundancy graph (FRG) of a computation $E$ is a directed
+%graph $FRG(N_{occ}, E_{up})$. The set of nodes consists of all real occurrences
+%of $E$ plus a $\Phi$ node for each $\Phi$-vertex of a real occurrence of $E$.
+%The edges in FRG are called upward edges and there is an upward edge in $E_{up}$
+%from each partially redundant real occurrence and partially redundant $\Phi$
+%operand occurrence to its representative occurrence.
+%\item Analogous: partially and fully anticipated
+%\item A placement is safe if all inserted real occurrences of a computation are
+%fully anticipated or fully available
+%\item A placement is computationally optimal if no safe placement can result in
+%fewer occurrences of the computation along any path from entry to exit in the
+%program
+%\end{enumerate}
+%
+%\paragraph*{Algorithm} 
+%\begin{itemize}
+%\item \texttt{insert-$\Phi$}
+%\item \texttt{rename}
+%\item \texttt{downsafety}
+%\item \texttt{canBeAvailable}
+%\item \texttt{finalise1}
+%\item \texttt{finalise2}
+%\item \texttt{codeMotion}
+%\end{itemize}
+%\paragraph*{$\Phi$-insertion}
+%A $\Phi$ is needed whenever two different values of $E$ reach a common point in
+%the program. Therefore, there are two sets of vertices in whose iterated
+%dominance frontier we will insert $\Phi$-functions: the set $R$ of real
+%occurrences of $E$ and the set $A$ of vertices with assignments to an operand of
+%$E$. An assignment to an operand of $E$ is a computation of $E$ which produces
+%the value $\bot$. 
+%
+%\textbf{Thus, we insert a $\Phi$ at the beginning of every vertex in
+%$DF^+(R) \cup DF^+(A)$}.
+%
+%An \textbf{evaluation} of a computation $E$ is either a real occurrence, a
+%$\Phi$ occurrence or an assignment to an operand of $E$.
+%
+%\paragraph*{Renaming}
+%Two occurrences of $E$ with the same version number have equal values. 
+%The algorithm is based on the rename algorithm for the translation to SSA form.
+%There are stacks for versions of the variables and stacks for versions of each
+%computation.
+%
+%\negv
+%\begin{program}
+%|pre-order traversal of the dominator tree|
+%|when an occurrence | o | of | E | is encountered: |
+%\IF (o | is a |\Phi| occurrence| ) \AR*
+%    |a new version is created|
+%    \textbf{return}
+%\FI
+%|compare the occurrence on top of the stack of | E
+%|with the top of the stack of each operand in the computation |
+%\IF (o | is a real occurrence | \land |all the versions match|) \AR*
+%    |add an upward edge in the factored redundancy graph|
+%    |from the occurrence to the top of the computation stack|
+%\ELSIF (o | is a real occurrence | \land |some version doesn't match|) \AR*
+%    |a new version is assigned to the occurrence|
+%\ELSE %! FIX INDENTATION
+%    \texttt{// the occurrence is a $\Phi$ operand}
+%    |assign the occurrence the special version |\bot
+%\FI
+%\end{program}
+%
+%\paragraph*{Computing downsafety}
+%To insert a computation $E$ at point $p$ it is required that $E$ is anticipated
+%at $p$. We may want to insert computations only at $\Phi$ operands that are 
+%$\bot$. With no critical edges, if a computation is anticipated at a $\Phi$ it
+%is also anticipated on each of its $\Phi$-operands. A $\Phi$ is not downsafe if
+%there is a path from that $\Phi$ along which there is no real occurrence of the
+%computation before program exit or before the computation's value has been
+%altered. This algorithm checks the latter case, the first can be discovered
+%during renaming if a $\Phi$ is on the top of a stack when the exit vertex is
+%reached.
+%
+%\pagebreak
+%\begin{program}
+%\PROC |downsafety| \BODY
+%    \FOREACH |f in | FGT \DO
+%        \IF (!|downsafe|[f]) \AR*
+%            \FOREACH |operand | \omega | of | f \DO
+%                |resetDownsafe|(\omega)
+%            \OD
+%        \FI
+%    \OD
+%\end{program}
+%\negv
+%\begin{program}
+%\PROC |resetDownsafe|(|operand | \omega) \BODY
+%    \IF (|hasRealUse|[\omega] \lor |def|(\omega) | is not a | \Phi) \AR*
+%        \textbf{return}
+%    \FI
+%    f = |def|[\omega]
+%    \IF (!|downsafe|[f]) \AR* \textbf{return} \FI
+%    |downsafe|[f] = false
+%    \FOREACH |operand o | of f \DO
+%        |resetDownsafe|(o)
+%    \OD
+%\end{program}
+%
+%\paragraph*{Availability}
+%For some of the $\Phi$s with a $\bot$ operand we insert the computation for each
+%of those $\bot$ operands. We cannot insert a computation for any $\Phi$ with a
+%$\bot$ operand, but only for the $\Phi$s which are downsafe. \textbf{The 
+%availability step finds the $\Phi$s where an expression can be safely made
+%available and then finds the latest points to insert new computations in
+%order to reduce the size of live ranges}.
+%
+%\texttt{canBeAvailable} searches the FRG from the $\Phi$s which are not downsafe
+%and which have at least one $\bot$ operand. The \texttt{canBeAvailable}
+%predicate is set to false for such $\Phi$s and the false value is propagated
+%forward.
+%
+%Then, \texttt{computeLater} initialises the \texttt{later} predicate to the
+%value of \\ \texttt{canBeAvailable}. The meaning of \texttt{later} is that if it is
+%true for a $\Phi$, then we do not have to insert a new computation in that
+%$\Phi$; we can insert the computation later. The \texttt{later} predicate is set
+%to false for the $\Phi$ with an operand which has a real use. Postponing the
+%insertion of the expression to after that real use will introduce redundancy,
+%since on the path from the real use to the newly inserted computation, the
+%computation is evaluated more than once.
+%
+%The \texttt{computeLater} then searches the FRG as shown in Algorithm 5.4
+%Whether an expression will be available at a $\Phi$ is now given by:
+%\begin{verbatim}
+%willBeAvailable = canBeAvailable && !later
+%\end{verbatim}
+%Each $\Phi$ operand has a predicate \texttt{insert}, which determines whether a
+%computation should be inserted at that operand, and it is true \iff the $\Phi$
+%satisfies \texttt{willBeAVailable} and the operand is $\bot$ or defined by a
+%$\Phi$ which does not satisfy \texttt{willBeAvailable}.
+%
+%\begin{program}
+%\PROC |computeWillBeAvailable|() \BODY
+%    |computeCanBeAvailable|
+%    |computeLater|
+%    \texttt{//willBeAvailable is canBeAvailable and NOT later}
+%\end{program}
+%\negv
+%\begin{program}
+%\PROC |computeCanBeAvailable|() \BODY
+%    \FOREACH |f in | FGT \DO
+%        |canBeAvailable|[f] = true
+%    \OD
+%    \FOREACH |f in | FGT \DO
+%        \IF (!|downsafe|[f] \land |canBeAvailable|[f] \land | there is an operand of | f | that is | \bot) \AR*
+%            |resetCanBeAvailable|(f)
+%        \FI
+%    \OD
+%\end{program}
+%\negv
+%\begin{program}
+%\PROC |resetCanBeAvailable|(f) \BODY
+%    |canBeAvailable|[f] = false
+%    \FOREACH |g in | FGT | with operand | \omega | such that | f = |def|(\omega) \DO
+%        \IF (!|hasRealUse|(\omega) \ \land \ !|downsafe|[g] \land | canBeAvailable|[g]) \AR*
+%            |resetCanBeAvailable|(g)
+%    \OD
+%\end{program}
+%\negv
+%\begin{program}
+%\PROC |computeLater|() \BODY
+%    \FOREACH |f in | FGT \DO
+%        |later|[f] = |canBeAvailable|[f]
+%    \OD
+%    \FOREACH |f in | FGT \DO
+%        \IF (|later|[f] \land | an operand | \omega | of | f | satisfies hasRealUse|[\omega] | and def|[\omega] \not= \bot) \AR*
+%            |resetLater|(f)
+%        \FI
+%    \OD
+%\end{program}
+%\negv
+%\begin{program}
+%\PROC |resetLater|(f) \BODY
+%    |later|[f] = false
+%    \FOREACH |g in | FGT | with operand | \omega | such that | f = |def|(\omega) \DO
+%        \IF (|later|[g]) \AR*
+%            |resetLater|(g)
+%    \OD
+%\end{program}
+%
+%\paragraph*{Finalise}
+%It performs insertions and deletions of real occurrences and the saving and
+%reloading of the temporary $t$ associated with the expression.
+%
+%These are the tasks for \texttt{finalise1}:
+%\begin{itemize}
+%\item To set a flag called \texttt{reload} for each real occurrence, which
+%specifies whether the occurrence should fetch the value by reading a temporary
+%$t_k$ (with $k$ denoting $t$'s SSA version) or it should perform the computation
+%itself.
+%\item For $\Phi$s which satisfy \texttt{willBeAvailable}, the expression is
+%inserted at incoming edges where the expression is not available
+%\item Determining which $\Phi$s will become $\phi$s for $t$
+%\item Updating the FRG so that $t$ becomes a variable in SSA form
+%\end{itemize}
+%\texttt{finalise1} makes a preorder traversal of the DT to find which definition
+%of $t_k$ should be used by the real occurrence whose \texttt{reload} flag is
+%true. In contrast with SSA renaming, \texttt{finalise1} does not need rename
+%stacks. Instead, a table called \texttt{availableDef} of available definitions
+%is used for the three first tasks of \texttt{finalise1}. \texttt{availableDef}
+%is indexed by redundancy class numbers, and \texttt{availableDef[x]} points to
+%the occurrence that defines the value of occurrences in redundancy class $x$
+%when a reload of class $x$ is seen. This defining occurrence is either a real
+%occurrence or a $\Phi$ which satisfies \texttt{willBeAvailable}.
+%
+%\begin{program}
+%\PROC finalise1() \BODY
+%    E = | the current expression|
+%    \FOREACH | redundancy class | x | of | E \DO
+%        |availableDef|[x] = \bot
+%    \OD
+%    \FOREACH | occurrence | \psi | of | E | in a preorder DT traversal | \DO
+%        x = |class|(\psi)
+%        \IF (\psi | is a | \Phi | occurrence|) \AR*
+%            \IF (|willBeAvailable|[\psi]) \AR*
+%            |availableDef|[x] = \psi
+%            \FI
+%        \ELSIF (\psi | is a real occurrence|) \AR*
+%            \IF (|availableDef|[x] = \bot \lor |availableDef|[x] | does not dominate | \psi) \AR*
+%                |reload|[\psi] = false
+%                |availableDef|[x] = \psi
+%            \ELSE
+%                |reload|[\psi] = true
+%                |def|[\psi] = |availableDef|[x]
+%            \FI
+%        \ELSE \texttt{  // $\psi$ is a $\Phi$ operand occurrence}
+%            f = | the | \Phi | in the successor vertex of this operand |
+%            \IF (|willBeAvailable|[f]) \AR*
+%                \IF (\psi | satisfies insert|) \AR*
+%                    |insert | E | at the end of the vertex containing | \psi
+%                    |def|[\psi] = |inserted occurrence|
+%                \ELSE
+%                    |def|[\psi] = |availableDef|[x]
+%                \FI
+%            \FI
+%        \FI
+%    \OD
+%\end{program}
+%Initially, all entries of \texttt{availableDef} are $\bot$ and during the
+%preorder traversal they will be updated as follows. $x$ is the redundancy class
+%number of the occurrence we visit.
+%\begin{itemize}
+%\item We visit a $\Phi$. If the $\Phi$ satisfies \texttt{willBeAvailable}, we
+%visit the redundancy class $x$ of this $\Phi$ for the first time and therefore
+%set \texttt{availableDef[x] = $\Phi$}. If the $\Phi$ does not satisfy
+%\texttt{willBeAvailable}, this $\Phi$ will not be part of the SSA graph for $t$
+%and we do nothing.
+%\item We visit a real occurrence $r$. If \texttt{availableDef[x] = $\bot$} or
+%\texttt{availableDef[x]} does not dominate this occurrence (which can happen,
+%for instance, if \texttt{availableDef[x]} was set at a then-clause and
+%we are processing a vertex in the else-clause), \textbf{then} we set
+%\texttt{availableDef[x] = $\Phi$}. If \texttt{availableDef[x] $\not= \bot$} and
+%\texttt{availableDef[x]} dominates this occurrence then we record
+%\texttt{availableDef[x]} as the defining occurrence of \texttt{r}: \texttt{def[r] =
+%    availableDef[x]} and set the \texttt{reload} flag to true.
+%\item We visit a $\Phi$ operand $\omega$. If $\omega$'s $\Phi$ is not
+%\texttt{willBeAvailable}, then nothing is done. Otherwise, if $\omega$ satisfies
+%insert we insert a new real occurrence \texttt{occ} at $\omega$ and set
+%\texttt{def[$\omega$] = occ}, and if $\omega$ does not satisfy insert we set
+%\texttt{def[$\omega$] = availableDef[x]}.
+%\end{itemize}
+%
+%These are the tasks for \texttt{finalise2}:
+%\begin{itemize}
+%\item To set a flag called \texttt{save} for real occurrences which should save
+%their computation to $t$ for use by subsequent reloads by other real
+%occurrences
+%\item Remove extraneous $\Phi$s
+%\end{itemize}
+%
+%\pagebreak
+%\begin{program}
+%\PROC |finalise2|() \BODY
+%    \FOREACH f | in FRG satisfying willBeAvailable | \DO
+%        |extraneous|[f] = true
+%    \OD
+%    \FOREACH | real occurrence | \psi \DO
+%        |save|[\psi] = false
+%    \OD
+%    \FOREACH f | in FRG | \DO
+%        \FOREACH | operand | \omega | of | f \DO
+%            |processed|[\omega] = false
+%        \OD
+%    \OD
+%    \FOREACH | real occurrence | \psi | satisfying reload| \DO
+%        |setSave|(|def|(\psi))
+%    \FOREACH F | in FRG | \DO
+%        \IF (f | satisfies willBeAvailable|) \AR*
+%            \IF (|extraneous|[f]) \AR*
+%                \FOREACH | operand | \omega | of | f \DO
+%                    \IF (|def|[\omega] | is a | \Phi | and not extraneous|[|def|[\omega]]
+%                         \lor | def|[\omega] | is real | \lor
+%                         \lor | def|[\omega] | is inserted|) \AR*
+%                        |setReplacement|(f, |def|[\omega])
+%                    \ELSE
+%                        F = F - \{f\}
+%                    \FI
+%                \OD
+%            \FI
+%        \FI
+%    \OD
+%\end{program}
+%
+%\begin{program}
+%\PROC |setSave|(\psi) \BODY
+%    \IF (\psi | is a real occurrence|) \AR*
+%        |save|(\psi) = true
+%    \ELSIF (\psi | is a | \Phi | occurrence|) \AR*
+%        \FOREACH |operand | \omega | of | \psi \DO
+%            \IF (!|processed|[\omega]) \AR*
+%                |setSave|(|def|[w])
+%            \FI
+%        \OD
+%    \FI
+%    \IF (\psi | is real or inserted occurrence|) \AR*
+%        \FOREACH (|willBeAvailable | f | in FRG such that | f \in DF^+(\psi)) \DO
+%            |extraneous|[f] = false
+%        \OD
+%    \FI
+%\end{program}
+%\pagebreak
+%\begin{program}
+%\PROC |setReplacement|(g, |replacingDefinition|) \BODY
+%    \FOREACH |willBeAvailable | f | in FRG with j-th operand defined by | g \DO
+%        \IF (|extraneous|[f]) \AR*
+%            |setReplacement|(|f|, |replacingDefinition|)
+%        \ELSE
+%            |replace j-th operand by replacingDefinition|
+%        \FI
+%        \FOREACH |real occurrence | \psi | satisfying reload with def|[\psi] = g \DO
+%            F = F - \{g\}
+%        \OD
+%    \OD
+%\end{program}
+%
+%\paragraph*{Code motion}
+%The last part of SSAPRE updates the program with the temporary expressions on
+%SSA form. In a preorder traversal of the dominator tree, each occurrence is
+%processed as follows: if \texttt{save} is true, a new version of the temporary
+%is created and code is inserted to save the value of the expression in the
+%temporary. If the occurrence $\omega$ is a real or a $\Phi$ operand and the
+%reload flag is true, the computation is replaced by the use of the temporary
+%saved by \texttt{def($\omega$)}. At each inserted occurrence, the value is saved
+%in a new version of the temporary, and at a $\Phi$ a $\phi$-function for the
+%temporary is created.
+%
+%\subsubsection*{Global Value Numbering (GNV)}
+%It aims at removing redundant computations. PRE discovers redundant evaluations
+%of some expression with particular lexical operator and operands, while GNV can
+%eliminate redundancy between lexically different expressions that produce the
+%same value.
+%\begin{verbatim}
+%x = a + a;
+%y = a * 2; // redundant
+%\end{verbatim}
+%It does not optimise partial redundancy.
+%Trend: use GNV, then PRE.
+%
+%\paragraph*{Hash-based value numbering: a simpler version}
+%This is an improvement to the renaming stage of the translation to SSA form.
+%
+%\pagebreak
+%\begin{program}
+%\PROC |search|(|vertex | v) \BODY
+%    |oldLHS| = |new List|
+%    |enter new scope in hash table | (|hashTable|[v])
+%    \FOREACH | statement | s | in | v \DO
+%        \FOREACH | variable | x | in | RHS(s) \DO
+%            i = |S|[x].|top|()
+%            |replace use of | x | by use of | x_i
+%        \OD
+%        x = |LHS|(s)
+%        \IF (x = null) \AR*
+%            \textbf{continue}
+%        \FI
+%        |oldLHS|.|add|(x)
+%        |simplify | s | using e.g. | x_i - x_i = 0
+%        h = |hashTable|[v][|RHS|(s)]
+%        \IF (h | was found|) \AR*
+%            |push (left-hand side) | h | onto S|[x]
+%        \ELSE
+%            i = |C|[x]
+%            |replace | x | by | x_i
+%            |S|[x].|push|(i)
+%            |C|[x] \texttt{ += } 1
+%            |hashTable|[v][|RHS|(s)] = |LHS|(s)
+%        \FI
+%    \OD
+%    \FOREACH w | in | succ(v) \DO
+%        j = |which predecessor is v to w? | \hspace{1cm} \texttt{// first, second, ... ?}
+%        \FOREACH \Phi|-function in | w \DO
+%            i = |S|[x].|top|()
+%            |replace use of the | j |-th operand in | RHS(\Phi) | by use of | x_i
+%        \OD
+%    \OD
+%    \FOREACH w | in children|(v) \DO
+%        |search|(w)
+%    \texttt{// pop every variable version pushed in v}
+%    \FOREACH | variable | x | in | oldLHS(s) \DO
+%        |S|[x].|pop|()
+%    \OD
+%\end{program}
+%
+%\paragraph*{Global value numbering}
+%\begin{itemize}
+%\item Constructs a value graph from the SSA graph. Nodes are values, labeled as
+%variables, constants or operations. A $\phi$ function is labeled by its vertex
+%in the CFG. There is an edge in the VG from a node which uses a value to the
+%node that defines the value. The edges going from a node are ordered.
+%\item Initially makes a partition $\pi_0$ where all nodes with the same function
+%label are assumed to be congruent and belong to the same $B_i$. All 
+%$\phi$-functions, multiplications and so on belong to different $B_i$s.
+%\item We want a partition which gives us as many equal values as possible,
+%satisfying the following rule:
+%\item Two nodes in the value graph are congruent \iff the nodes have identical
+%function labels and the corresponding heads of the edges leaving the nodes are
+%congruent
+%\end{itemize}
+%
+%\paragraph*{$O(N^2)$ algorithm}
+%The algorithm checks all blocks to see if any should be split into two:
+%when it discovers that two nodes in the same block which are not congruent.
+%
+%\begin{program}
+%\PROC N^2-|partition|() \BODY
+%    \pi_0 = \{B_0, B_1, ..., B_p\}
+%    i = 0
+%    |change| = true
+%    \WHILE (|change|) \DO
+%        |change| = false
+%        k = 0
+%        \FOREACH B_j | in | \pi_i \DO
+%            v = |node from | B_j
+%            |create a new block | B_k | in | \pi_{i+1}
+%            |put | v | in | B_k | in | \pi_{i+1}
+%            \FOREACH | node | w \in B_j \DO
+%                \IF (|match|(v, w)) \AR*
+%                    |add | w | to | B_k | in | \pi_{i+1}
+%                \ELSE
+%                    |change| = true
+%                    |add | w | to | B_{k+1}
+%                \FI
+%            \OD
+%        k \texttt{ += } 1
+%    \OD
+%    i \texttt{ += } 1
+%\end{program}
+%\negv
+%\begin{program}
+%\FUNCT |match|(|node | v, | node | w) \BODY
+%    \FOR i = 1 | until the number of operands of | v \DO
+%        a_v = |head of | i|-th edge of | v
+%        a_w = |head of | i|-th edge of | w
+%        \IF (a_v | and | a_w | belong to different blocks|) \AR*
+%            \textbf{return } false
+%        \FI
+%    \OD
+%    \textbf{return } true
+%\end{program}
+%
+%\paragraph*{$O(N log N)$ algorithm}
+%\begin{itemize}
+%\item A block $B_j$ is split into two new blocks using $B_i$ such that\\
+%$B_k = \{v \mid v \in B_j \land f(v) \in B_i\}$ and $B_{k+1} = \{v \mid v \in
+%B_j \land f(v) \not\in B_i\}$
+%\item For each block $B_i \subseteq S$, $f^{-1}(B) = \{v \mid f(v) \in B\}$
+%\item A partition $\phi$ is safe with respect to a $T \subseteq S$ if for each
+%block $B_i$ we have either $B_i \subseteq f^{-1}(T)$ or $B_i \ \cap f^{-1}(T) =
+%\emptyset$
+%\end{itemize}
+%\negv
+%\begin{program}
+%\PROC |partitionValueGraph|() \BODY
+%    |workList| = \{B_1, B_2,..., B_p\}
+%    q = p
+%    \WHILE (|workList| \not= \emptyset) \DO
+%        |take a | B_i | from worklist|
+%        \FOREACH | position | p | of a use of | x \in B_i \DO
+%            |inverse| = \emptyset
+%            \FOREACH x \in B_i \DO
+%                |add all uses of | x | in position | p | to inverse|
+%            \OD
+%            \FOREACH j | such that | B_j \cap | inverse | \not= \emptyset \land \ B_j \not\subseteq |inverse| \DO
+%                     q \texttt{ += } 1
+%                     |create new class | B_q
+%                     B_q = B_j \cap |inverse|
+%                     B_j = B_j - B_q
+%                     \IF (B_j \in |workList|)
+%                        |add | B_q | to workList|
+%                    \ELSE
+%                        |add | min(B_j, B_q) | to workList|
+%                    \FI
+%            \OD
+%        \OD
+%    \OD
+%\end{program}
+%
+%After a safe partition has been found, we apply:
+%\begin{program}
+%\PROC |dominatorBasedGVN|() \BODY
+%    \FOREACH | block | B_i \in \pi \DO
+%        \FOREACH |pair of nodes | (v, w) | in | B_i \times B_i \DO
+%            \IF (v = w) \textbf{ continue} \FI
+%            \IF (|def|[v] | dominates def|[w]) \AR*
+%                |replace all uses of | w | by uses of | v
+%                |remove def|[w]
+%            \FI
+%        \OD
+%    \OD
+%\end{program}
+%
+%\subsubsection*{Operator strength reduction - Induction variable elimination}
+%The main purpose is to transform multiplications occurring inside a loop to
+%additions.
+%\begin{program}
+%\PROC |operatorStrengthReduce|() \BODY
+%    |dfsNumIndex| = 0
+%    |stack| = |new Stack|
+%    \FOREACH |vertex | v | in SSA Graph | \DO
+%        \IF (|dfsNum|[v] = null) \AR*
+%            strongConnect(v)
+%        \FI \OD
+%\end{program} \negv
+%\begin{program}
+%\PROC |strongConnect|(|vertex | v) \BODY
+%    |dfsNum|[v] = |dfsNumIndex|
+%    |lowLink|[v] = |dfsNumIndex|
+%    |dfsNumIndex| \texttt{ += } 1
+%    |stack|.|push|(v)
+%    \FOREACH w | in | operands(v) \DO
+%        \IF (|dfsNum|[w] = null) \AR*
+%            |strongConnect|(w)
+%            |lowLink|[v] = min(|lowLink|[v], |lowLink|[w])
+%        \ELSIF (|dfsNum|[w] < |dfsNum|[v] \land |stack|.|contains|(w)) \AR*
+%            |lowLink|[v] = min(|lowLink|[v], |dfsNum|[w]) \FI
+%    \OD
+%    \IF (|lowLink|[v] = |dfsNum|[v]) \AR*
+%        |scc| = |new Set|
+%        \DOW
+%            w = |stack|.|pop|()
+%            |scc|.|add|(w)
+%        \ODW (w \not= v)
+%        |processSCC|(|scc|)
+%    \FI
+%\end{program} \negv
+%\begin{program}
+%\PROC |processSCC|(|Set scc|) \BODY
+%    \IF (|scc has a single member | n) \AR*
+%        \IF (|validForm|(n)) \AR*
+%            |replace|(n, iv, rc)
+%        \ELSE
+%            |header|[n] = \bot
+%        \FI
+%    \ELSE
+%        |classify|(|scc|)
+%\end{program} \negv
+%\begin{program}
+%\FUNCT |validForm|(n) \AR*
+%    \IF (n | is of form | \texttt{x = iv $\times$ rc } (|or with | iv | and | rc | inverted|)
+%         \lor \ n | is of form | \texttt{x = iv $\pm$ rc } (|or with | iv | and | rc | inverted|)
+%         \textbf{return } true \FI
+%    \textbf{return } false
+%\end{program}\negv
+%\begin{program}
+%\PROC |replace|(|operation|, iv, rc) \BODY
+%    |result| = |reduce|(|opCode|(operation), iv, rc)
+%    |replace operation with mov using result as source|
+%    |header|[|operation|] = |header|[iv]
+%\end{program} \negv
+%
+%\begin{program}
+%\FUNCT |reduce|(|operation|, iv, rc) \BODY
+%    |result| = |lookup|(|opCode|, iv, rc)
+%    \IF |result is not found| \AR*
+%        |result| = |new temp|()
+%        |install|(|opCode|, iv, rc, |result|)
+%        |newDef| = |copyDef|(iv, |result|)
+%        \FOREACH |operand | \omega | in newDef| \DO
+%            \IF (\omega | is an induction variable |) \AR*
+%                |replace | \omega | with reduce|(|opCode|, \omega, rc)
+%            \ELSIF (|opCode| = \times \ \lor \ |newDef is a | \phi) \AR*
+%                |replace | \omega | with apply|(|opCode|, \omega, rc)
+%            \FI
+%        \OD
+%    \FI
+%    \textbf{return } |result|
+%\end{program} \negv
+%\begin{program}
+%\FUNCT |apply|(|opCode|, |op1|, |op2|) \BODY
+%    |result| = |lookup|(|opCode|, |op1|, |op2|)
+%    \IF |result is not found| \AR*
+%        \IF |op1 is an induction variable | \land | op2 is a region constant| \AR*
+%            |result| = |reduce|(|opcode|, |op1|, |op2|)
+%        \ELSIF |op2 is an induction variable | \land | op1 is a region constant| \AR*
+%            |result| = |reduce|(|opcode|, |op2|, |op1|)
+%        \ELSE
+%            |result| = |new temp|()
+%            |install|(|opCode|, op1, op2, |result|)
+%            |choose the location where the operation will be inserted|
+%            |perform constant folding if possible|
+%            |create a new operation at the chosen location|
+%    \FI
+%    \textbf{return } |result|
+%\end{program} \pagebreak
+%\begin{program}
+%\PROC |classify|(|Set scc|) \BODY
+%    \FOREACH n \in |scc| \DO
+%        \IF (|rpo|[|vertex|(n)] < |rpo|[|header|]) \AR*
+%            |header| = |vertex|(n)
+%        \FI
+%    \OD
+%    \FOREACH n \in |scc| \DO
+%        \IF (|operator|(n) \not\in \{\phi, +, -, |move|\}) \AR*
+%            |sccIsInduction| = false
+%        \ELSE
+%            \FOREACH |operand | \omega \in |operands|(n) \DO
+%                \IF (\omega \not\in |scc | \land \ !|regionConst|(\omega, |header|)) \AR*
+%                    |sccIsInduction| = false
+%                \ELSE
+%                    |sccIsInduction| = true
+%                    \textbf{break}
+%                \FI
+%            \OD
+%        \FI
+%    \OD
+%    \IF (|sccIsInduction|) \AR*
+%        \FOREACH n \in |scc| \DO
+%            |header|[n] = |header|
+%        \OD
+%    \ELSE
+%        \FOREACH n \in |scc| \DO
+%            \IF (|validForm|(n)) \AR*
+%                |replace|(n, iv, rc)
+%            \ELSE
+%                |header|(n) = \bot
+%            \FI
+%        \OD
+%    \FI
+%\end{program} \negv
+%\begin{program}
+%\FUNCT |regionConst|(x, |header|) \BODY
+%    \textbf{return } x | is constant | \lor | vertex|(x) | strictly dominates header |
+%\end{program}\negv
 
 \end{document}
 
