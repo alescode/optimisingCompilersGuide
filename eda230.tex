@@ -7,6 +7,7 @@
 
 \renewcommand{\o}{\lor}
 \newcommand{\gge}{\ \underline{\gg}\ }
+\newcommand{\lle}{\ \underline{\ll}\ }
 \newcommand{\no}{\neg}
 \newcommand{\eq}{\equiv}
 \newcommand{\nq}{\not\equiv}
@@ -36,8 +37,8 @@
 \section*{Basics}
 \subsubsection*{Lattice}
 It's a partially ordered set where every pair has least upper and greatest lower
-bounds (infimum and supremum) which are unique. They are called the
-\textit{meet} ($\land$) and \textit{join} ($\lor$), respectively.
+bounds (supremum and infimum) which are unique. They are called the
+\textit{join} ($\lor$) and \textit{meet} ($\land$), respectively.
 
 \subsubsection*{Tarjan's algorithm for Strongly Connected Components}
 \negv
@@ -442,8 +443,197 @@ marked as executable are inspected. $\phi$-functions can become constant.
 If any of the source operands is $\bot$, the result becomes $\bot$, if both are
 constants the result becomes constant. Otherwise, the result remains $\top$.
 \item The first time a vertex is visited, all statements are interpreted.
-Subsequent visits to the vertex only need to interpret the $\phi$-functions
+Subsequent visits to the vertex only need to interpret the $\phi$-functions.
 \end{itemize}
+
+\negv
+\begin{program}
+\PROC |constantPropagation|() \BODY
+    \FOREACH |definition | d \DO
+        |value|[d] = \top
+    \OD
+    \FOREACH |vertex | v \DO
+        |visited|[v] = false
+    \OD
+    |visitVertex|(s)
+    \WHILE (|arcWorkList| \not= \emptyset \ \lor \ |ssaWorkList| \not= \emptyset) \DO
+        \IF (|arcWorkList| \not= \emptyset) \AR*
+            |arc| = |arkWorkList|.|first|()
+            \IF (\neg |executable|[|arc|]) \AR*
+                |executable|[|arc|] = true
+                |visitVertex|(|head|(|arc|))
+            \FI
+        \FI
+        \IF (|ssaWorkList| \not= \emptyset) \AR*
+            t = |ssaWorkList|.|first|()
+            |visitStatement|(t)
+        \FI
+    \OD
+\end{program}
+
+\negv
+\begin{program}
+\PROC |visitVertex|(v) \BODY
+    |onlyPhi| = |visited|[v]
+    |visited|[v] = true
+    \FOREACH |statement | s | in | w \DO
+        \IF (|onlyPhi | \land \ s | is not | \phi) \AR*
+                \textbf{continue}
+        \FI
+        |visitStatement|(s, v)
+    \OD
+\end{program}
+
+\pagebreak
+\begin{program}
+\PROC |visitStatement|(|vertex | v, | statement | s) \BODY
+    |statementType| = |statementType|(s)
+    \IF (|statementType is unconditional branch|) \AR*
+        |arcWorkList|.|add|(v, |succ|(v))
+    \ELSIF (|statementType is conditional branch|) \AR*
+        |add appropriate arcs depending on what is known|
+        |about the operands|
+    \ELSIF (|statementType is add, mul, etc|) \AR*
+        |left| = |value of the first source operand|
+        |right| = |value of the second source operand|
+        |result| = |what can be determined from left and right|
+        \IF (|result| < |value|[s]) \AR*
+            |add uses of destination of | s | to ssaWorkList|
+            |value|[s] = |result|
+        \FI
+    \ELSIF (|statementType is a | \phi |-function|) \AR*
+        |result| = \top
+        \FOREACH p \in |pred|(v) \DO
+            \IF (|executable|[(p,v)]) \AR*
+                |value| = |value of | \phi|-function operand for | p
+                |result| = |infimum|(|result|, |value|)
+            \FI
+        \OD
+        \IF (|result| < |value|[s]) \AR*
+            |add uses of destination of | s | to ssaWorkList|
+            |value|[s] = |result|
+        \FI
+    \FI
+    ...
+
+\end{program}
+
+\section*{Dead Code Elimination}
+\subsubsection*{Control dependence}
+\begin{itemize}
+\item Removes useless statements: a statement is useless if it cannot affect
+program output in any way
+\item First remove unreachable code: DFS from the start vertex and delete all
+unvisited vertices
+\item Early DCE algorithms: live variable analysis to remove assignments to 
+local variables which have no use
+\item Other optimisations on SSA form frequently produce useless code
+\item New idea: statements which can directly affect output are \texttt{prelive}
+and are marked as \texttt{live}, then a search from their operands mark
+additional statements as \texttt{live}. These statements are put in
+\texttt{prelive}:
+    \begin{enumerate}
+    \item Writes to global variables and through pointers
+    \item Function calls to I/O routines
+    \item Function calls with unknown side-effects
+    \item Return statements
+    \end{enumerate}
+\item When a statement is marked as \texttt{live}, all multiway branches which
+directly control whether that statement will be executed should also be marked
+as \texttt{live}.
+\end{itemize}
+\paragraph*{Theory}
+\begin{enumerate}
+\item The reverse control flow graph: s and e have switched roles.
+\item Postdominance, $\lle$, is equivalent to dominance in the RCFG.
+\item Control dependence is equivalent to dominance frontiers in the RCFG.
+\item A vertex $v$ is control dependent on $w \in CD^{-1}(v)$ if $v$
+postdominates a succesor of $w$ but does not strictly postdominate $w$:\\
+$CD^{-1}(v) = \{w \mid \existe{s \in succ(w)}{}{v \lle s \ \land \ v \not\ll w}\}$
+\item $w \in CD^{-1}(v) $ in the CFG \iff $w \in DF(v)$ in the RCFG
+\end{enumerate}
+
+\paragraph*{Algorithm}
+\begin{program}
+\PROC |computeControlDependence|() \BODY
+    |build RCFG|
+    |compute RDT|
+    |compute RDF|
+    \FOREACH | vertex | v \DO
+        |CD|[u] = |new Set|
+    \OD
+    \FOREACH | vertex | v \DO
+        \FOREACH | vertex | w | in RDF|(v) \DO
+            |CD|[w].|add|(v)
+        \OD
+    \OD
+\end{program}
+
+\subsubsection*{Dead code elimination on SSA Form}
+\texttt{eliminateDeadCode} will return a CFG that consists
+of some vertices that are live and some that are not. Then, \texttt{simplify}
+will connect the live blocks and delete the others.
+
+\begin{program}
+\PROC |eliminateDeadCode|() \BODY
+    \FOREACH | statement | s \DO
+        \IF (s | is prelive|) \AR*
+            |live|[s] = true
+            |workList|.|add|(s)
+        \ELSE
+            |live|[s] = false
+        \FI
+    \OD
+    \WHILE (|workList| \not= \emptyset) \DO
+        s = |workList|.|first|()
+        v = |vertex|(s)
+        |live|[v] = true
+        \FOREACH | source operand | \omega | of | s \DO
+            t = |def|(\omega)
+            \IF (\neg |live|[t]) \AR*
+                |live|[t] = true
+                |workList|.|add|(t)
+            \FI
+        \OD
+        \FOREACH | vertex | v \in |CD|^{-1}(|vertex|(s)) \DO
+            t = |multiway branch of v|
+            \IF (\neg |live|[t]) \AR*
+                |live|[t] = true
+                |workList|.|add|(t)
+            \FI
+        \OD
+    \OD
+    \FOREACH |statement | s \DO
+        \IF (\neg|live|[s] \ \land \ |s is not a label | \land |s is not a branch|) \AR*
+            |delete s|
+        \FI
+    \OD
+    |simplify|()
+\end{program}
+\pagebreak
+\begin{program}
+\PROC |simplify|() \BODY
+    |live|[e] = true
+    |change| = false
+    \FOREACH |vertex | v | in CFG| \DO
+        \IF (\neg |live|[v]) \AR*
+            \textbf{continue}
+        \FI
+        \FOREACH w \in |succ|(v) \DO
+            \IF (|live|(w)) \AR*
+                \textbf{continue}
+            \FI
+            u = iPdom(w) \texttt{// inmediate postdominator}
+            |replace | (v, w) | with |(v, u)
+            |update the branch in | v | to its new target | u
+            |change| = true
+        \OD
+    \OD
+    \IF (|change|) \AR*
+        |delete vertices from CFG which have become unreachable|
+        |update dominator tree|
+    \FI
+\end{program}
 
 %%%%
 \pagebreak
