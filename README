@@ -12,8 +12,8 @@ Pages 14-21     *
       133-141   *
       141-180!! *
       189-197   *
-      223-232   <-
-      239-246
+      223-232   *
+      239-246   *
 
 To compile:
 0. Locate the file program.sty from your LaTeX installation, and replace it with

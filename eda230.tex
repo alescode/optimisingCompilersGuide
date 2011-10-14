@@ -635,8 +635,56 @@ will connect the live blocks and delete the others.
     \FI
 \end{program}
 
+\subsubsection*{Instruction scheduling}
+Its purpose is to improve performance by reducing the number of pipeline stalls
+suffered during execution. The module of the optimiser which does this is the
+instruction scheduler, and it tries to remove pipeline stalls by changing the
+order of instructions in a basic block, for example.
+It is usually done before register allocation. Additional registers are needed
+to hold values when there are unrelated instructions between a producer and a
+consumer of a value (\textbf{register pressure}). 
+It needs an instruction level data dependency graph.
+
+The most fundamental instruction scheduling technique is \textbf{list
+scheduling}, and schedules one basic block at a time.
+First, an instruction level data dependency graph is built, based on the
+definition and uses of storage resources, e.g. variables, registers.
+\begin{itemize}
+\item \texttt{def(r)} is the instruction which most recently modified r while
+scanning backwards, or $\bot$.
+\item \texttt{uses(r)} is the set of instructions which use the current value of
+r.
+\end{itemize}
+
+\section*{Register allocation}
+If it is done one basic block at a time, it is called \textbf{local register
+allocation}.
+One of the best approaches is to model it as graph coloring.
+An undirected graph, \textbf{the interference graph} is constructed with live
+ranges as nodes and with an edge between the two nodes if the corresponding live
+ranges are live at the same time anywhere in the procedure. The graph should be
+colored with $K$ colors (number of registers).
+One can decide to decide that certain variables must reside in memory
+(\textbf{spilling}).
+
+\begin{itemize}
+\item The interference graph is built
+\item The number of neighbors of a node is its \textbf{degree}
+\item Suppose $K$ colors are available, and a node $n$ has a degree less than
+$K$. If we were to remove $n$ and the resulting graph is colorable with $K$
+colors, then the original graph is also colorable with $K$ colors.
+\item The allocator keeps looking for a node $n$ with fewer than $K$ colors,
+removes it from the graph and pushes it into a stack. This is repeated until
+either the graph is empty or no node with degree less than $K$ is found, in
+which case a node is removed from the graph and its variable is spilled.
+\item When the graph has become empty, one node $n$ at a time is popped from the
+stack and reinserted into the graph. Then, a color which is not used by any
+neighbor of $n$ is chosen and $n$ is allocated this color.
+\item Register coalescing resembles copy propagation.
+
+\end{itemize}
+
 %%%%
-\pagebreak
 \section*{ADVANCED - SSA Optimisation}
 \subsubsection*{Partial Redundancy Elimination (PRE)}
 \paragraph*{Basics}
