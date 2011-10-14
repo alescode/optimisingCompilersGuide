@@ -964,7 +964,7 @@ when it discovers that two nodes in the same block which are not congruent.
 \end{program}
 \negv
 \begin{program}
-\PROC |match|(|node | v, | node | w) \BODY
+\FUNCT |match|(|node | v, | node | w) \BODY
     \FOR i = 1 | until the number of operands of | v \DO
         a_v = |head of | i|-th edge of | v
         a_w = |head of | i|-th edge of | w
@@ -1011,6 +1011,153 @@ block $B_i$ we have either $B_i \subseteq f^{-1}(T)$ or $B_i \ \cap f^{-1}(T) =
         \OD
     \OD
 \end{program}
+
+After a safe partition has been found, we apply:
+\begin{program}
+\PROC |dominatorBasedGVN|() \BODY
+    \FOREACH | block | B_i \in \pi \DO
+        \FOREACH |pair of nodes | (v, w) | in | B_i \times B_i \DO
+            \IF (v = w) \textbf{ continue} \FI
+            \IF (|def|[v] | dominates def|[w]) \AR*
+                |replace all uses of | w | by uses of | v
+                |remove def|[w]
+            \FI
+        \OD
+    \OD
+\end{program}
+
+\subsubsection*{Operator strength reduction - Induction variable elimination}
+The main purpose is to transform multiplications occurring inside a loop to
+additions.
+\begin{program}
+\PROC |operatorStrengthReduce|() \BODY
+    |dfsNumIndex| = 0
+    |stack| = |new Stack|
+    \FOREACH |vertex | v | in SSA Graph | \DO
+        \IF (|dfsNum|[v] = null) \AR*
+            strongConnect(v)
+        \FI \OD
+\end{program} \negv
+\begin{program}
+\PROC |strongConnect|(|vertex | v) \BODY
+    |dfsNum|[v] = |dfsNumIndex|
+    |lowLink|[v] = |dfsNumIndex|
+    |dfsNumIndex| \texttt{ += } 1
+    |stack|.|push|(v)
+    \FOREACH w | in | operands(v) \DO
+        \IF (|dfsNum|[w] = null) \AR*
+            |strongConnect|(w)
+            |lowLink|[v] = min(|lowLink|[v], |lowLink|[w])
+        \ELSIF (|dfsNum|[w] < |dfsNum|[v] \land |stack|.|contains|(w)) \AR*
+            |lowLink|[v] = min(|lowLink|[v], |dfsNum|[w]) \FI
+    \OD
+    \IF (|lowLink|[v] = |dfsNum|[v]) \AR*
+        |scc| = |new Set|
+        \DOW
+            w = |stack|.|pop|()
+            |scc|.|add|(w)
+        \ODW (w \not= v)
+        |processSCC|(|scc|)
+    \FI
+\end{program} \negv
+\begin{program}
+\PROC |processSCC|(|Set scc|) \BODY
+    \IF (|scc has a single member | n) \AR*
+        \IF (|validForm|(n)) \AR*
+            |replace|(n, iv, rc)
+        \ELSE
+            |header|[n] = \bot
+        \FI
+    \ELSE
+        |classify|(|scc|)
+\end{program} \negv
+\begin{program}
+\FUNCT |validForm|(n) \AR*
+    \IF (n | is of form | \texttt{x = iv $\times$ rc } (|or with | iv | and | rc | inverted|)
+         \lor \ n | is of form | \texttt{x = iv $\pm$ rc } (|or with | iv | and | rc | inverted|)
+         \textbf{return } true \FI
+    \textbf{return } false
+\end{program}\negv
+\begin{program}
+\PROC |replace|(|operation|, iv, rc) \BODY
+    |result| = |reduce|(|opCode|(operation), iv, rc)
+    |replace operation with mov using result as source|
+    |header|[|operation|] = |header|[iv]
+\end{program} \negv
+
+\begin{program}
+\FUNCT |reduce|(|operation|, iv, rc) \BODY
+    |result| = |lookup|(|opCode|, iv, rc)
+    \IF |result is not found| \AR*
+        |result| = |new temp|()
+        |install|(|opCode|, iv, rc, |result|)
+        |newDef| = |copyDef|(iv, |result|)
+        \FOREACH |operand | \omega | in newDef| \DO
+            \IF (\omega | is an induction variable |) \AR*
+                |replace | \omega | with reduce|(|opCode|, \omega, rc)
+            \ELSIF (|opCode| = \times \ \lor \ |newDef is a | \phi) \AR*
+                |replace | \omega | with apply|(|opCode|, \omega, rc)
+            \FI
+        \OD
+    \FI
+    \textbf{return } |result|
+\end{program} \negv
+\begin{program}
+\FUNCT |apply|(|opCode|, |op1|, |op2|) \BODY
+    |result| = |lookup|(|opCode|, |op1|, |op2|)
+    \IF |result is not found| \AR*
+        \IF |op1 is an induction variable | \land | op2 is a region constant| \AR*
+            |result| = |reduce|(|opcode|, |op1|, |op2|)
+        \ELSIF |op2 is an induction variable | \land | op1 is a region constant| \AR*
+            |result| = |reduce|(|opcode|, |op2|, |op1|)
+        \ELSE
+            |result| = |new temp|()
+            |install|(|opCode|, op1, op2, |result|)
+            |choose the location where the operation will be inserted|
+            |perform constant folding if possible|
+            |create a new operation at the chosen location|
+    \FI
+    \textbf{return } |result|
+\end{program} \pagebreak
+\begin{program}
+\PROC |classify|(|Set scc|) \BODY
+    \FOREACH n \in |scc| \DO
+        \IF (|rpo|[|vertex|(n)] < |rpo|[|header|]) \AR*
+            |header| = |vertex|(n)
+        \FI
+    \OD
+    \FOREACH n \in |scc| \DO
+        \IF (|operator|(n) \not\in \{\phi, +, -, |move|\}) \AR*
+            |sccIsInduction| = false
+        \ELSE
+            \FOREACH |operand | \omega \in |operands|(n) \DO
+                \IF (\omega \not\in |scc | \land \ !|regionConst|(\omega, |header|)) \AR*
+                    |sccIsInduction| = false
+                \ELSE
+                    |sccIsInduction| = true
+                    \textbf{break}
+                \FI
+            \OD
+        \FI
+    \OD
+    \IF (|sccIsInduction|) \AR*
+        \FOREACH n \in |scc| \DO
+            |header|[n] = |header|
+        \OD
+    \ELSE
+        \FOREACH n \in |scc| \DO
+            \IF (|validForm|(n)) \AR*
+                |replace|(n, iv, rc)
+            \ELSE
+                |header|(n) = \bot
+            \FI
+        \OD
+    \FI
+\end{program} \negv
+\begin{program}
+\FUNCT |regionConst|(x, |header|) \BODY
+    \textbf{return } x | is constant | \lor | vertex|(x) | strictly dominates header |
+\end{program}\negv
 
 \end{document}
 
